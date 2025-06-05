@@ -4,7 +4,7 @@ I'm thinking of using an Arduino UNO hooked up to a servo motor and LCD display.
 I want to incorporate a light weight AI model in this project.
 Basically, I type in the CLI Terminal sentences like "Close the motor" or "Open the motor" and the motor will move accordingly. Also, terms like "Close the motor a bit/slightly" and "Open the motor a bit/slightly" will cause the motor to turn less. I will change the words if I want it to turn more, vice versa.
 
-I can use Ollama llama3 model or other more light weight models as running service. Have it decide the final integer value needed to be sent to the arduino.
+I can use Ollama phi3:mini model or other more light weight models as running service. Have it decide the final integer value needed to be sent to the arduino.
 
 I'm using a Windows machine.
 
@@ -39,3 +39,8 @@ Instead of the LLM outputting the exact angle, you could have it output a comman
     Then your Python script translates these structured commands into actual angles based on current_motor_angle and predefined steps. This can be more reliable than trying to get a precise number from the LLM every time, especially for relative movements. You can instruct the LLM to output JSON.
 
 **Latency**: There will be some latency (CLI input -> Python -> Ollama -> Python -> Arduino -> Motor moves). For simple open/close, this is fine.
+
+# Log
+## Servo Control Without Display
+
+![Terminal showcasing the user input and responses from LLM for servo control](run-1.png)
