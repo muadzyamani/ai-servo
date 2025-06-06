@@ -43,8 +43,14 @@ Instead of the LLM outputting the exact angle, you could have it output a comman
 # Log
 ## Servo Control Without Display
 
-![Terminal showcasing the user input and responses from LLM for servo control](run-1.png)
+![Terminal showcasing the user input and responses from LLM for servo control](terminal-1.png)
 
 ## Servo Control With Display
 
-![Terminal showcasing the user input and responses from LLM for servo control and display](run-2.png)
+![Terminal showcasing the user input and responses from LLM for servo control and display](terminal-2.png)
+
+![16x2 LCD Displaying: AI Thinking..](display-ai-thinking.jpg)
+
+## Servo Control With Speech
+
+![Terminal showcasing the user input speech and responses](terminal-3.png)
