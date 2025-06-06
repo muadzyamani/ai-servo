@@ -11,8 +11,22 @@ const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 // Display States
-enum DisplayState { IDLE, THINKING, PROCESSING_RESULT };
-DisplayState currentDisplayState = IDLE;
+enum DisplayState { WELCOME_SEQUENCE, IDLE, THINKING, PROCESSING_RESULT };
+DisplayState currentDisplayState = WELCOME_SEQUENCE;
+
+// Welcome Sequence Variables
+const unsigned long welcomeInterval = 3000;
+unsigned long lastWelcomeTime = 0;
+int welcomeMessageIndex = 0;
+String welcomeLines[] = {
+    "Hello, User",
+    "I am Phi3:mini",
+    "Welcome!",
+    "Nice to meet you",
+    "Ready for your",
+    "command..."
+};
+const int numWelcomeLines = sizeof(welcomeLines) / sizeof(String);
 
 // Animation variables for THINKING state
 unsigned long lastAnimationTime = 0;
@@ -25,13 +39,27 @@ String thinkingFrames[] = {".  ", ".. ", "..."}; // Dots for animation
 unsigned long processingDisplayStartTime = 0;
 const unsigned long processingDisplayDuration = 2500; // Show result for 2.5 seconds
 
+// Function to display the current welcome message
+void displayWelcomeMessage() {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(welcomeLines[welcomeMessageIndex]);
+    
+    if (welcomeMessageIndex + 1 < numWelcomeLines) {
+        lcd.setCursor(0, 1);
+        lcd.print(welcomeLines[welcomeMessageIndex + 1]);
+    }
+    lastWelcomeTime = millis();
+}
+
 void setup() {
     Serial.begin(115200); // MATCH PYTHON'S BAUD RATE
     myservo.attach(servoPin);
     myservo.write(currentAngle);
 
     lcd.begin(16, 2);
-    updateLcdIdle(); // Initial display
+    displayWelcomeMessage();
+    
     Serial.println("Arduino Ready. LCD Initialized. Waiting for command...");
 }
 
@@ -121,7 +149,13 @@ void loop() {
     }
 
     // Handle Display State Updates
-    if (currentDisplayState == THINKING) {
+    if (currentDisplayState == WELCOME_SEQUENCE) {
+        if (millis() - lastWelcomeTime > welcomeInterval) {
+            // Move to the next pair of messages
+            welcomeMessageIndex = (welcomeMessageIndex + 2) % numWelcomeLines;
+            displayWelcomeMessage(); // Show the new message
+        }
+    } else if (currentDisplayState == THINKING) {
         if (millis() - lastAnimationTime > animationInterval) {
             displayThinking(); // Update animation frame
         }
@@ -130,10 +164,4 @@ void loop() {
             displayIdle(); // Revert to idle screen after showing result/error
         }
     }
-    // IDLE state is updated when commands are processed or explicitly set.
-}
-
-// Renamed from updateLcdIdle to avoid confusion in the loop
-void updateLcdIdle() {
-    displayIdle(); // Call the function that sets state and prints
 }
