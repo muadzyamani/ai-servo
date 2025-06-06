@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Servo Control</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #007bff; }
+        label { display: block; margin-top: 10px; font-weight: bold;}
+        input[type="text"] { width: calc(100% - 22px); padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        button {
+            background-color: #007bff; color: white; padding: 10px 15px; margin-top: 15px;
+            border: none; border-radius: 4px; cursor: pointer; font-size: 16px;
+        }
+        button:hover { background-color: #0056b3; }
+        .quick-buttons button { background-color: #28a745; margin-right: 10px; }
+        .quick-buttons button:hover { background-color: #1e7e34; }
+        #statusMessage { margin-top: 20px; padding: 10px; border-radius: 4px; font-weight: bold; }
+        .status-success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status-thinking { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        #currentAngleDisplay { font-size: 1.2em; text-align: center; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Servo Motor Control</h1>
+
+        <div id="currentAngleDisplay">Current Angle: <span id="angleValue">{{ current_angle }}</span>°</div>
+
+        <label for="commandInput">Enter Command:</label>
+        <input type="text" id="commandInput" placeholder="e.g., Open the motor slightly">
+        <button onclick="sendCommand()">Send Command</button>
+
+        <div class="quick-buttons">
+            <h3>Quick Actions:</h3>
+            <button onclick="sendQuickCommand('open fully')">Open Fully</button>
+            <button onclick="sendQuickCommand('close fully')">Close Fully</button>
+            <button onclick="sendQuickCommand('open a bit')">Open a Bit</button>
+            <button onclick="sendQuickCommand('close a bit')">Close a Bit</button>
+            <button onclick="sendQuickCommand('set to 90 degrees')">Set to 90°</button>
+        </div>
+
+        <div id="statusMessage">Enter a command to begin.</div>
+    </div>
+
+    <script>
+        const commandInput = document.getElementById('commandInput');
+        const statusMessageDiv = document.getElementById('statusMessage');
+        const angleValueSpan = document.getElementById('angleValue');
+
+        async function sendCommandToServer(commandText) {
+            statusMessageDiv.textContent = 'Processing... AI might be thinking...';
+            statusMessageDiv.className = 'status-thinking'; // Thinking style
+
+            try {
+                const response = await fetch('/send_command', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ command: commandText }),
+                });
+                const result = await response.json();
+
+                statusMessageDiv.textContent = result.message || 'Command processed.';
+                if (result.status === 'success') {
+                    statusMessageDiv.className = 'status-success';
+                    if (result.angle !== undefined) {
+                        angleValueSpan.textContent = result.angle;
+                    }
+                } else {
+                    statusMessageDiv.className = 'status-error';
+                }
+                // Optionally, update angle from a get_status call if needed
+                // updateAngleDisplay(); 
+            } catch (error) {
+                console.error('Error sending command:', error);
+                statusMessageDiv.textContent = 'Error: Could not connect to server.';
+                statusMessageDiv.className = 'status-error';
+            }
+        }
+
+        function sendCommand() {
+            const commandText = commandInput.value.trim();
+            if (commandText) {
+                sendCommandToServer(commandText);
+                commandInput.value = ''; // Clear input after sending
+            } else {
+                statusMessageDiv.textContent = 'Please enter a command.';
+                statusMessageDiv.className = 'status-error';
+            }
+        }
+
+        function sendQuickCommand(commandText) {
+            commandInput.value = commandText; // Optionally show in input
+            sendCommandToServer(commandText);
+        }
+
+        // Function to periodically update the angle (optional)
+        async function updateAngleDisplay() {
+            try {
+                const response = await fetch('/get_status');
+                const data = await response.json();
+                if (data.status === 'success' && data.current_angle !== undefined) {
+                    angleValueSpan.textContent = data.current_angle;
+                }
+            } catch (error) {
+                console.error('Error fetching status:', error);
+            }
+        }
+
+        // Fetch initial status or update periodically
+        // updateAngleDisplay();
+        // setInterval(updateAngleDisplay, 5000); // Update every 5 seconds
+    </script>
+</body>
+</html>
