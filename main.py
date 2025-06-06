@@ -3,6 +3,7 @@ import requests
 import json
 import time
 import re
+import speech_recognition as sr
 
 # --- Configuration ---
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
@@ -15,6 +16,34 @@ MOTOR_DEFAULT_STEP = 15
 MOTOR_INITIAL_ANGLE = 90
 
 # --- Helper Functions ---
+def listen_for_voice_command_google():
+    """
+    Listens for a command from the microphone and uses Google's Web Speech API.
+    """
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        print("\nListening for your command...")
+        recognizer.adjust_for_ambient_noise(source, duration=0.5)
+        try:
+            audio_data = recognizer.listen(source, timeout=5)
+            print("Recognizing...")
+            
+            # Use Google's free web API for recognition
+            text = recognizer.recognize_google(audio_data)
+            print(f"You said: '{text}'")
+            return text
+            
+        except sr.WaitTimeoutError:
+            print("Listening timed out. No command detected.")
+            return None
+        except sr.UnknownValueError:
+            print("Google Speech Recognition could not understand audio.")
+            return None
+        except sr.RequestError:
+            print("Error connecting to Google Speech Recognition service.")
+            print("Please check your internet connection and try again.")
+            return None
+
 def check_ollama_availability():
     """Check if Ollama is running and accessible."""
     try:
@@ -213,15 +242,24 @@ def get_angle_command(user_input, current_motor_angle_state, arduino_ser): # Pas
 
 def run_cli_interaction(arduino_ser, initial_angle):
     current_angle_local = initial_angle
-    print("\nMotor Control CLI. Type 'exit' to quit.")
+    print("\nMotor Control CLI. Type 'speech' for speech mode. Type 'exit' to quit.")
     print(f"Current motor angle assumed to be: {current_angle_local}")
 
     while True:
-        user_input = input("You: ").strip()
+        mode_input = input("You: ").strip()
+
+        if mode_input.lower() == 'speech':
+            user_input = listen_for_voice_command_google()
+        else:
+            user_input = mode_input
+
+        if not user_input:
+            print("No valid command received. Please try again.")
+            continue
+        
         if user_input.lower() == 'exit':
             break
-        if not user_input:
-            continue
+        
 
         target_angle = get_angle_command(user_input, current_angle_local, arduino_ser)
 
