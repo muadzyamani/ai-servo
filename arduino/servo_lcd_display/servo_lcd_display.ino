@@ -4,7 +4,8 @@
 // Servo Configuration
 Servo myservo;
 const int servoPin = 9;
-int currentAngle = 90;
+const int INITIAL_ANGLE = 90;
+int currentAngle = INITIAL_ANGLE;
 
 // LCD Pin Configuration
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
@@ -108,6 +109,13 @@ void loop() {
             // First frame will be drawn by updateLcdThinking below
         } else if (command.equalsIgnoreCase("IDLE_STATE")) {
             displayIdle();
+        } else if (command.equalsIgnoreCase("RESET_STATE"))  {
+            Serial.println("System reset command received.");
+            currentAngle = INITIAL_ANGLE;
+            myservo.write(currentAngle);
+            currentDisplayState = WELCOME_SEQUENCE;
+            welcomeMessageIndex = 0;
+            displayWelcomeMessage();
         } else {
             // Assume it's an angle command
             bool isValidNumber = true;
