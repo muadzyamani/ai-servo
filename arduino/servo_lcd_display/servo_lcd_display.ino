@@ -190,7 +190,6 @@ void loop() {
     }  else if (currentDisplayState == SHUTTING_DOWN) {
         if (millis() - shutdownStartTime > shutdownDisplayDuration) {
             lcd.clear();
-            // lcd.noDisplay(); // Turns the display off
             digitalWrite(backlightPin, LOW);
             Serial.println("Display off. Halting execution.");
             // Enter an infinite loop to stop all further processing
