@@ -258,6 +258,9 @@ def run_cli_interaction(arduino_ser, initial_angle):
             continue
         
         if user_input.lower() == 'exit':
+            print("Sending shutdown command to Arduino...")
+            send_command_to_arduino(arduino_ser, "SHUTDOWN_CMD")
+            time.sleep(1)
             break
 
         if user_input.lower() == 'reset':
