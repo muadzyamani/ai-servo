@@ -15,6 +15,22 @@ MOTOR_DEFAULT_STEP = 15
 MOTOR_INITIAL_ANGLE = 90
 
 # --- Helper Functions ---
+def check_ollama_availability():
+    """Check if Ollama is running and accessible."""
+    try:
+        # Try to ping the Ollama API
+        response = requests.get("http://localhost:11434/api/tags", timeout=5)
+        response.raise_for_status()
+        print("Ollama is running and accessible")
+        return True
+    except requests.exceptions.ConnectionError:
+        print("Error: Ollama is not running or not accessible at localhost:11434")
+        print("Please start Ollama and try again.")
+        return False
+    except requests.exceptions.RequestException as e:
+        print(f"Error checking Ollama availability: {e}")
+        return False
+
 def send_to_ollama(prompt_text):
     payload = {
         "model": OLLAMA_MODEL,
@@ -169,12 +185,12 @@ def get_angle_command(user_input, current_motor_angle_state, arduino_ser): # Pas
     Gets the target angle from keywords first, then LLM fallback.
     Returns the target angle (int) or None.
     """
-    target_angle = get_angle_command_from_keywords(user_input, current_motor_angle_state)
-    if target_angle is not None:
-        return target_angle
+    # target_angle = get_angle_command_from_keywords(user_input, current_motor_angle_state)
+    # if target_angle is not None:
+    #     return target_angle
 
     # If no keyword match, then use LLM
-    print("No direct keyword match. Querying LLM...")
+    # print("No direct keyword match. Querying LLM...")
     send_command_to_arduino(arduino_ser, "THINKING_START") # TELL ARDUINO TO START ANIMATION
 
     prompt = build_llm_prompt(user_input, current_motor_angle_state)
@@ -222,6 +238,14 @@ def run_cli_interaction(arduino_ser, initial_angle):
 
 # --- Main Execution ---
 if __name__ == "__main__":
+    # Check Ollama availability first
+    print("Checking system dependencies...")
+    is_ollama_running = check_ollama_availability()
+    
+    if not is_ollama_running:
+        print("Exiting. Please start Ollama and try again.")
+        exit(1)
+
     arduino_connection = initialize_arduino_connection(SERIAL_PORT, SERIAL_BAUDRATE)
 
     if arduino_connection:
