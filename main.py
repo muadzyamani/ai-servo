@@ -242,7 +242,7 @@ def get_angle_command(user_input, current_motor_angle_state, arduino_ser): # Pas
 
 def run_cli_interaction(arduino_ser, initial_angle):
     current_angle_local = initial_angle
-    print("\nMotor Control CLI. Type 'speech' for speech mode. Type 'exit' to quit.")
+    print("\nMotor Control CLI. Type 'speech' for speech mode. 'reset' to restart, or 'exit' to quit.")
     print(f"Current motor angle assumed to be: {current_angle_local}")
 
     while True:
@@ -259,6 +259,13 @@ def run_cli_interaction(arduino_ser, initial_angle):
         
         if user_input.lower() == 'exit':
             break
+
+        if user_input.lower() == 'reset':
+            print("System resetting. Motor returning to default and welcome screen activated.")
+            send_command_to_arduino(arduino_ser, "RESET_STATE")
+            current_angle_local = MOTOR_INITIAL_ANGLE
+            print(f"Angle state reset to: {current_angle_local}")
+            continue
         
 
         target_angle = get_angle_command(user_input, current_angle_local, arduino_ser)
