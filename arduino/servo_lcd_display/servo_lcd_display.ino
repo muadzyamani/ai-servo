@@ -8,11 +8,12 @@ const int INITIAL_ANGLE = 90;
 int currentAngle = INITIAL_ANGLE;
 
 // LCD Pin Configuration
+const int backlightPin = 10;
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 // Display States
-enum DisplayState { WELCOME_SEQUENCE, IDLE, THINKING, PROCESSING_RESULT };
+enum DisplayState { WELCOME_SEQUENCE, IDLE, THINKING, PROCESSING_RESULT, SHUTTING_DOWN };
 DisplayState currentDisplayState = WELCOME_SEQUENCE;
 
 // Welcome Sequence Variables
@@ -40,6 +41,10 @@ String thinkingFrames[] = {".  ", ".. ", "..."}; // Dots for animation
 unsigned long processingDisplayStartTime = 0;
 const unsigned long processingDisplayDuration = 2500; // Show result for 2.5 seconds
 
+// Timer for SHUTTING_DOWN state
+unsigned long shutdownStartTime = 0;
+const unsigned long shutdownDisplayDuration = 3000;
+
 // Function to display the current welcome message
 void displayWelcomeMessage() {
     lcd.clear();
@@ -58,7 +63,9 @@ void setup() {
     myservo.attach(servoPin);
     myservo.write(currentAngle);
 
+    pinMode(backlightPin, OUTPUT);
     lcd.begin(16, 2);
+    digitalWrite(backlightPin, HIGH);
     displayWelcomeMessage();
     
     Serial.println("Arduino Ready. LCD Initialized. Waiting for command...");
@@ -116,6 +123,15 @@ void loop() {
             currentDisplayState = WELCOME_SEQUENCE;
             welcomeMessageIndex = 0;
             displayWelcomeMessage();
+        } else if (command.equalsIgnoreCase("SHUTDOWN_CMD")) {
+            Serial.println("Shutdown command received.");
+            currentAngle = INITIAL_ANGLE; // Return motor to safe position
+            myservo.write(currentAngle);
+            currentDisplayState = SHUTTING_DOWN;
+            shutdownStartTime = millis(); // Start the shutdown timer
+            lcd.clear();
+            lcd.setCursor(0, 0); lcd.print("System");
+            lcd.setCursor(0, 1); lcd.print("Shutting Down...");
         } else {
             // Assume it's an angle command
             bool isValidNumber = true;
@@ -170,6 +186,15 @@ void loop() {
     } else if (currentDisplayState == PROCESSING_RESULT) {
         if (millis() - processingDisplayStartTime > processingDisplayDuration) {
             displayIdle(); // Revert to idle screen after showing result/error
+        }
+    }  else if (currentDisplayState == SHUTTING_DOWN) {
+        if (millis() - shutdownStartTime > shutdownDisplayDuration) {
+            lcd.clear();
+            // lcd.noDisplay(); // Turns the display off
+            digitalWrite(backlightPin, LOW);
+            Serial.println("Display off. Halting execution.");
+            // Enter an infinite loop to stop all further processing
+            while(1) {}
         }
     }
 }
