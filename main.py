@@ -11,7 +11,7 @@ from src.llm import (
 )
 
 class LlmServoControl:
-    """Orchestrates the voice-controlled motor application."""
+    """Manages the LLM-controlled motor application."""
     def __init__(self):
         self.current_angle = cfg.MOTOR_INITIAL_ANGLE
         self.arduino = ArduinoController(cfg.SERIAL_PORT, cfg.SERIAL_BAUDRATE)
