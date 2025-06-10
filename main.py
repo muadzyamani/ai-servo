@@ -1,312 +1,119 @@
-import serial
-import requests
-import json
 import time
-import re
-import speech_recognition as sr
+import config as cfg
+from voice import listen_for_voice_command_google
+from arduino import ArduinoController, CMD_THINKING_START, CMD_IDLE_STATE, CMD_RESET_STATE, CMD_SHUTDOWN
+from llm import (
+    build_llm_prompt,
+    check_ollama_availability,
+    parse_command_with_keywords,
+    parse_angle_from_llm_text,
+    send_to_ollama
+)
 
-# --- Configuration ---
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "phi3:mini"
-SERIAL_PORT = 'COM3'
-SERIAL_BAUDRATE = 115200 # Make sure this matches Arduino
-MOTOR_MIN_ANGLE = 0
-MOTOR_MAX_ANGLE = 180
-MOTOR_DEFAULT_STEP = 15
-MOTOR_INITIAL_ANGLE = 90
+class LlmServoControl:
+    """Orchestrates the voice-controlled motor application."""
+    def __init__(self):
+        self.current_angle = cfg.MOTOR_INITIAL_ANGLE
+        self.arduino = ArduinoController(cfg.SERIAL_PORT, cfg.SERIAL_BAUDRATE)
 
-# --- Helper Functions ---
-def listen_for_voice_command_google():
-    """
-    Listens for a command from the microphone and uses Google's Web Speech API.
-    """
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        print("\nListening for your command...")
-        recognizer.adjust_for_ambient_noise(source, duration=0.5)
-        try:
-            audio_data = recognizer.listen(source, timeout=5)
-            print("Recognizing...")
-            
-            # Use Google's free web API for recognition
-            text = recognizer.recognize_google(audio_data)
-            print(f"You said: '{text}'")
-            return text
-            
-        except sr.WaitTimeoutError:
-            print("Listening timed out. No command detected.")
-            return None
-        except sr.UnknownValueError:
-            print("Google Speech Recognition could not understand audio.")
-            return None
-        except sr.RequestError:
-            print("Error connecting to Google Speech Recognition service.")
-            print("Please check your internet connection and try again.")
-            return None
-
-def check_ollama_availability():
-    """Check if Ollama is running and accessible."""
-    try:
-        # Try to ping the Ollama API
-        response = requests.get("http://localhost:11434/api/tags", timeout=5)
-        response.raise_for_status()
-        print("Ollama is running and accessible")
-        return True
-    except requests.exceptions.ConnectionError:
-        print("Error: Ollama is not running or not accessible at localhost:11434")
-        print("Please start Ollama and try again.")
-        return False
-    except requests.exceptions.RequestException as e:
-        print(f"Error checking Ollama availability: {e}")
-        return False
-
-def send_to_ollama(prompt_text):
-    payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt_text,
-        "stream": False,
-        "options": {
-            "temperature": 0.2,
-            "num_predict": 20
-        }
-    }
-    try:
-        response = requests.post(OLLAMA_API_URL, json=payload, timeout=30)
-        response.raise_for_status()
-        response_data = response.json()
-        return response_data.get("response", "").strip()
-    except requests.exceptions.RequestException as e:
-        print(f"Error communicating with Ollama: {e}")
-        return None
-
-def parse_llm_response_for_angle(llm_text, user_input_raw, current_angle):
-    print(f"LLM Raw Response: '{llm_text}'")
-    match = re.search(r'\b(\d{1,3})\b', llm_text)
-    if match:
-        try:
-            angle = int(match.group(1))
-            if MOTOR_MIN_ANGLE <= angle <= MOTOR_MAX_ANGLE:
-                print(f"LLM suggests angle: {angle}")
-                return angle
-        except ValueError:
-            pass
-    user_input_lower = user_input_raw.lower()
-    new_angle = current_angle
-    target_open_full = MOTOR_MAX_ANGLE
-    target_close_full = MOTOR_MIN_ANGLE
-    if "open" in user_input_lower:
-        if "bit" in user_input_lower or "slightly" in user_input_lower:
-            new_angle = min(MOTOR_MAX_ANGLE, current_angle + MOTOR_DEFAULT_STEP)
-        elif "fully" in user_input_lower or "all the way" in user_input_lower:
-            new_angle = target_open_full
-        else:
-            new_angle = target_open_full
-    elif "close" in user_input_lower:
-        if "bit" in user_input_lower or "slightly" in user_input_lower:
-            new_angle = max(MOTOR_MIN_ANGLE, current_angle - MOTOR_DEFAULT_STEP)
-        elif "fully" in user_input_lower or "all the way" in user_input_lower:
-            new_angle = target_close_full
-        else:
-            new_angle = target_close_full
-    elif "set to" in user_input_lower or "move to" in user_input_lower:
-        match_angle_val = re.search(r'\b(\d{1,3})\b', user_input_lower)
-        if match_angle_val:
-            try:
-                angle_val = int(match_angle_val.group(1))
-                if MOTOR_MIN_ANGLE <= angle_val <= MOTOR_MAX_ANGLE:
-                    new_angle = angle_val
-            except ValueError:
-                pass
-    if new_angle != current_angle:
-        print(f"Fallback logic suggests angle: {new_angle}")
-        return new_angle
-    print("Could not determine a valid angle from LLM or keywords.")
-    return None
-
-def send_command_to_arduino(ser, command_str):
-    """Sends a generic command string to the Arduino."""
-    try:
-        print(f"Sending control command to Arduino: {command_str.strip()}")
-        ser.write(f"{command_str.strip()}\n".encode('utf-8'))
-        time.sleep(0.05) # Brief pause for Arduino to register command
-        # Don't necessarily wait for a response for control commands unless designed
-        return True
-    except serial.SerialException as e:
-        print(f"Error writing control command to Arduino: {e}")
-        return False
-
-def send_angle_to_arduino(ser, angle_to_send):
-    """Sends the target angle to the Arduino."""
-    if angle_to_send is not None:
-        angle_to_send = max(MOTOR_MIN_ANGLE, min(MOTOR_MAX_ANGLE, int(angle_to_send)))
-        print(f"Sending angle to Arduino: {angle_to_send}")
-        try:
-            ser.write(f"{angle_to_send}\n".encode('utf-8'))
-            time.sleep(0.1)
-            response_lines = []
-            while ser.in_waiting > 0:
-                response_from_arduino = ser.readline().decode('utf-8', errors='ignore').strip()
-                if response_from_arduino:
-                    response_lines.append(response_from_arduino)
-            if response_lines:
-                print(f"Arduino: {' | '.join(response_lines)}")
-            return True
-        except serial.SerialException as e:
-            print(f"Error writing angle to Arduino: {e}")
+    def setup(self):
+        """Initializes system checks and connections. Returns True on success."""
+        print("Checking system dependencies...")
+        if not check_ollama_availability():
+            print("Exiting. Please start Ollama and try again.")
             return False
-    return False
+        
+        if not self.arduino.connect():
+            print("Failed to connect to Arduino. Exiting.")
+            return False
+            
+        return True
 
-def initialize_arduino_connection(port, baudrate, initial_wait_time=2):
-    try:
-        arduino_ser = serial.Serial(port, baudrate, timeout=1)
-        print(f"Connected to Arduino on {port}")
-        time.sleep(initial_wait_time)
-        while arduino_ser.in_waiting > 0:
-            init_msg = arduino_ser.readline().decode('utf-8', errors='ignore').strip()
-            if init_msg:
-                 print(f"Arduino (init): {init_msg}")
-        return arduino_ser
-    except serial.SerialException as e:
-        print(f"Error opening serial port {port}: {e}")
+    def get_target_angle(self, user_input):
+        """
+        Determines the target angle from user input.
+        Tries fast keyword parsing first, then falls back to the LLM.
+        """
+        # 1. Try fast, reliable keyword-based parsing
+        target_angle = parse_command_with_keywords(
+            user_input, self.current_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE, cfg.MOTOR_DEFAULT_STEP
+        )
+        if target_angle is not None:
+            print(f"Keyword match suggests angle: {target_angle}")
+            return target_angle
+
+        # 2. If no keyword match, use the LLM as a fallback
+        print("No direct keyword match. Querying LLM...")
+        self.arduino.send_command(CMD_THINKING_START)
+
+        prompt = build_llm_prompt(
+            user_input, self.current_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE, 
+            cfg.MOTOR_DEFAULT_STEP, cfg.MOTOR_INITIAL_ANGLE
+        )
+        llm_response_text = send_to_ollama(prompt, cfg.OLLAMA_API_URL, cfg.OLLAMA_MODEL)
+
+        if llm_response_text:
+            return parse_angle_from_llm_text(llm_response_text, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE)
+        
+        print("LLM failed or did not provide a valid angle.")
         return None
 
-def build_llm_prompt(user_input, current_angle):
-    return f"""
-You are an AI assistant controlling a servo motor with a range of {MOTOR_MIN_ANGLE} to {MOTOR_MAX_ANGLE} degrees.
-The current motor angle is {current_angle} degrees.
-0 degrees means 'fully closed'. 180 degrees means 'fully open'.
-The user wants to: "{user_input}"
-Based on the user's request and the current angle, what should the new target angle be?
-If the user wants to return to the default or initial condition, assume {MOTOR_INITIAL_ANGLE} degrees.
-If the user says "a bit" or "slightly", adjust by approximately {MOTOR_DEFAULT_STEP} degrees.
-If the user says "open", unless specified otherwise, assume "fully open" ({MOTOR_MAX_ANGLE} degrees).
-If the user says "close", unless specified otherwise, assume "fully closed" ({MOTOR_MIN_ANGLE} degrees).
-Respond ONLY with the integer number for the new target angle. For example: 90 or 0 or 180 or 15.
-Do not add any other text, explanation, or punctuation. Just the number.
-User: "{user_input}"
-Current Angle: {current_angle}
-New Target Angle (JUST THE NUMBER):
-"""
+    def run(self):
+        """The main application loop for user interaction."""
+        print("\nMotor Control CLI. Type 'speech' for voice, 'reset' for default, or 'exit' to quit.")
+        print(f"Current motor angle assumed to be: {self.current_angle}")
 
-# WIP: Need to refine this function
-def get_angle_command_from_keywords(user_input_raw, current_angle):
-    user_input_lower = user_input_raw.lower()
-    new_angle = None
-    if "open fully" in user_input_lower or "open all the way" in user_input_lower: new_angle = MOTOR_MAX_ANGLE
-    elif "close fully" in user_input_lower or "close all the way" in user_input_lower: new_angle = MOTOR_MIN_ANGLE
-    elif "open a bit" in user_input_lower or "open slightly" in user_input_lower: new_angle = min(MOTOR_MAX_ANGLE, current_angle + MOTOR_DEFAULT_STEP)
-    elif "close a bit" in user_input_lower or "close slightly" in user_input_lower: new_angle = max(MOTOR_MIN_ANGLE, current_angle - MOTOR_DEFAULT_STEP)
-    elif "open" in user_input_lower and not ("bit" in user_input_lower or "slightly" in user_input_lower): new_angle = MOTOR_MAX_ANGLE
-    elif "close" in user_input_lower and not ("bit" in user_input_lower or "slightly" in user_input_lower): new_angle = MOTOR_MIN_ANGLE
-    match_set_angle = re.search(r'(?:set to|move to)\s*(\d{1,3})(?:\s*degrees)?', user_input_lower)
-    if match_set_angle:
-        try:
-            angle_val = int(match_set_angle.group(1))
-            if MOTOR_MIN_ANGLE <= angle_val <= MOTOR_MAX_ANGLE: new_angle = angle_val
-        except ValueError: pass
-    if new_angle is not None:
-        print(f"Keyword match suggests angle: {new_angle}")
-        return new_angle
-    return None
+        while True:
+            mode_input = input("You: ").strip()
 
-def get_angle_command(user_input, current_motor_angle_state, arduino_ser): # Pass arduino_ser
-    """
-    Gets the target angle from keywords first, then LLM fallback.
-    Returns the target angle (int) or None.
-    """
-    # target_angle = get_angle_command_from_keywords(user_input, current_motor_angle_state)
-    # if target_angle is not None:
-    #     return target_angle
-
-    # If no keyword match, then use LLM
-    # print("No direct keyword match. Querying LLM...")
-    send_command_to_arduino(arduino_ser, "THINKING_START") # TELL ARDUINO TO START ANIMATION
-
-    prompt = build_llm_prompt(user_input, current_motor_angle_state)
-    llm_response_text = send_to_ollama(prompt)
-
-    # The angle command sent later will implicitly stop the "thinking" animation on Arduino
-
-    if llm_response_text:
-        target_angle = parse_llm_response_for_angle(llm_response_text, user_input, current_motor_angle_state)
-
-    if target_angle is None:
-        if llm_response_text:
-             print("LLM did not provide a clear angle. Trying LLM response with fallback keywords...")
-             target_angle = parse_llm_response_for_angle(llm_response_text, user_input, current_motor_angle_state)
-        else:
-            print("LLM failed or no response, and no keyword match. Relying on basic fallback...")
-            target_angle = parse_llm_response_for_angle("", user_input, current_motor_angle_state)
-    return target_angle
-
-
-def run_cli_interaction(arduino_ser, initial_angle):
-    current_angle_local = initial_angle
-    print("\nMotor Control CLI. Type 'speech' for speech mode. 'reset' to restart, or 'exit' to quit.")
-    print(f"Current motor angle assumed to be: {current_angle_local}")
-
-    while True:
-        mode_input = input("You: ").strip()
-
-        if mode_input.lower() == 'speech':
-            user_input = listen_for_voice_command_google()
-        else:
-            user_input = mode_input
-
-        if not user_input:
-            print("No valid command received. Please try again.")
-            continue
-        
-        if user_input.lower() == 'exit':
-            print("Sending shutdown command to Arduino...")
-            send_command_to_arduino(arduino_ser, "SHUTDOWN_CMD")
-            time.sleep(1)
-            break
-
-        if user_input.lower() == 'reset':
-            print("System resetting. Motor returning to default and welcome screen activated.")
-            send_command_to_arduino(arduino_ser, "RESET_STATE")
-            current_angle_local = MOTOR_INITIAL_ANGLE
-            print(f"Angle state reset to: {current_angle_local}")
-            continue
-        
-
-        target_angle = get_angle_command(user_input, current_angle_local, arduino_ser)
-
-        if target_angle is not None:
-            if send_angle_to_arduino(arduino_ser, target_angle):
-                current_angle_local = target_angle
-                print(f"Motor command processed. New assumed angle: {current_angle_local}")
+            if mode_input.lower() == 'speech':
+                user_input = listen_for_voice_command_google()
             else:
-                print("Failed to send command to Arduino. Angle not updated.")
-                send_command_to_arduino(arduino_ser, "IDLE_STATE")
-        else:
-            print("AI/Fallback could not determine a valid action. Please try rephrasing.")
-            send_command_to_arduino(arduino_ser, "IDLE_STATE")
+                user_input = mode_input
+
+            if not user_input:
+                print("No valid command received. Please try again.")
+                continue
+            
+            if user_input.lower() == 'exit':
+                self.arduino.send_command(CMD_SHUTDOWN)
+                time.sleep(1) # Give it a moment
+                break
+
+            if user_input.lower() == 'reset':
+                print("System resetting. Motor returning to default.")
+                self.arduino.send_command(CMD_RESET_STATE)
+                self.current_angle = cfg.MOTOR_INITIAL_ANGLE
+                print(f"Angle state reset to: {self.current_angle}")
+                continue
+
+            target_angle = self.get_target_angle(user_input)
+
+            if target_angle is not None:
+                if self.arduino.set_angle(target_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE):
+                    self.current_angle = target_angle
+                    print(f"Motor command processed. New assumed angle: {self.current_angle}")
+                else:
+                    print("Failed to send command to Arduino. Angle not updated.")
+                    self.arduino.send_command(CMD_IDLE_STATE)
+            else:
+                print("AI/Keywords could not determine a valid action. Please try rephrasing.")
+                self.arduino.send_command(CMD_IDLE_STATE)
+                
+    def shutdown(self):
+        """Properly closes resources."""
+        self.arduino.disconnect()
+        print("Program finished.")
+
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    # Check Ollama availability first
-    print("Checking system dependencies...")
-    is_ollama_running = check_ollama_availability()
+    app = LlmServoControl()
     
-    if not is_ollama_running:
-        print("Exiting. Please start Ollama and try again.")
-        exit(1)
-
-    arduino_connection = initialize_arduino_connection(SERIAL_PORT, SERIAL_BAUDRATE)
-
-    if arduino_connection:
-        current_motor_angle_main = MOTOR_INITIAL_ANGLE
+    if app.setup():
         try:
-            run_cli_interaction(arduino_connection, current_motor_angle_main)
+            app.run()
         except KeyboardInterrupt:
             print("\nExiting due to user interruption...")
         finally:
-            print("Closing Arduino connection...")
-            if arduino_connection.is_open:
-                arduino_connection.close()
-            print("Connection closed.")
-    else:
-        print("Failed to connect to Arduino. Exiting.")
-    print("Program finished.")
+            app.shutdown()
