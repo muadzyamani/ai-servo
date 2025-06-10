@@ -1,8 +1,8 @@
 import time
-import config as cfg
-from voice import listen_for_voice_command_google
-from arduino import ArduinoController, CMD_THINKING_START, CMD_IDLE_STATE, CMD_RESET_STATE, CMD_SHUTDOWN
-from llm import (
+import src.config as cfg
+from src.voice import listen_for_voice_command_google
+from src.arduino import ArduinoController, CMD_THINKING_START, CMD_IDLE_STATE, CMD_RESET_STATE, CMD_SHUTDOWN
+from src.llm import (
     build_llm_prompt,
     check_ollama_availability,
     parse_command_with_keywords,
