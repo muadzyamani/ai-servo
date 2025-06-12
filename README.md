@@ -153,7 +153,7 @@ The system now features a full lifecycle: a dynamic welcome screen on startup, m
 5.  **Interact via CLI:**
     The script will connect and show the prompt:
     ```
-    Motor Control CLI. Type 'speech' for voice, 'reset' for default, or 'exit' to quit.
+    Motor Control CLI. Type 'speech' for voice, 'commands' for help, 'reset', or 'exit'.
     Current motor angle assumed to be: 90
     You: 
     ```
@@ -165,6 +165,7 @@ The system now features a full lifecycle: a dynamic welcome screen on startup, m
     *   `spin around 3 times`
     *   `sweep the area`
     *   `speech` - The script will print "Listening..." and you can speak your command.
+    *   `commands` - Displays a list of available commands and examples.
     *   `reset` - Resets the motor and restarts the welcome screen on the LCD.
     *   `exit` - Initiates the shutdown sequence on the Arduino and closes the program.
 

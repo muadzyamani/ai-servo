@@ -46,6 +46,32 @@ class LlmServoControl:
         
         print("LLM failed or did not provide a valid command.")
         return None
+    
+    def display_command_help(self):
+        """Prints a formatted help screen with available commands and examples."""
+        print("\n--- Available Commands & Examples ---")
+        print("The AI can interpret a wide range of natural language phrases.")
+        print("Here are the primary actions it can perform:\n")
+        
+        commands = [
+            {"name": "GOTO", "desc": "Move to a specific angle.", "example": "'set to 45 degrees', 'go to 180'"},
+            {"name": "ADJUST", "desc": "Turn by a relative amount.", "example": "'turn a little to the right', 'move left by 20 deg'"},
+            {"name": "SPIN", "desc": "Rotate back and forth rapidly.", "example": "'spin around a few times', 'do a spin'"},
+            {"name": "SWEEP", "desc": "Scan smoothly side-to-side.", "example": "'sweep the area', 'look around'"},
+            {"name": "NOD", "desc": "Perform a 'yes' motion.", "example": "'nod your head', 'nod yes twice'"},
+            {"name": "SHAKE", "desc": "Perform a chaotic 'no' motion.", "example": "'shake your head no', 'shake it'"},
+        ]
+        
+        # Using f-strings for nice alignment
+        for cmd in commands:
+            print(f"  - {cmd['name']:<7} : {cmd['desc']:<35} e.g., {cmd['example']}")
+            
+        print("\n--- Special Keywords ---")
+        print("  - speech  : Activate voice command mode.")
+        print("  - reset   : Reset the motor and the Arduino's display.")
+        print("  - exit    : Shut down the system gracefully.")
+        print("  - commands: Display this help message.")
+        print("-" * 37 + "\n")
 
     def run(self):
         """The main application loop for user interaction."""
@@ -74,6 +100,10 @@ class LlmServoControl:
                 self.arduino.send_command(CMD_RESET_STATE)
                 self.current_angle = cfg.MOTOR_INITIAL_ANGLE
                 print(f"Angle state reset to: {self.current_angle}")
+                continue
+
+            if user_input.lower() == 'commands':
+                self.display_command_help()
                 continue
 
             command_dict = self.get_llm_command(user_input)
