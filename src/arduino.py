@@ -1,7 +1,7 @@
 import serial
 import time
 import json
-import src.config as cfg # <--- ADD THIS IMPORT
+import src.config as cfg
 
 CMD_THINKING_START = "THINKING_START"
 CMD_IDLE_STATE = "IDLE_STATE"
