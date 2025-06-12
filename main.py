@@ -6,7 +6,7 @@ from src.llm import (
     build_llm_prompt,
     check_ollama_availability,
     parse_command_with_keywords,
-    parse_angle_from_llm_text,
+    parse_llm_response_to_json,
     send_to_ollama
 )
 
@@ -29,33 +29,22 @@ class LlmServoControl:
             
         return True
 
-    def get_target_angle(self, user_input):
+    def get_llm_command(self, user_input):
         """
-        Determines the target angle from user input.
-        Tries fast keyword parsing first, then falls back to the LLM.
+        Determines the target command from user input by querying the LLM.
         """
-        # 1. Try fast, reliable keyword-based parsing
-        target_angle = parse_command_with_keywords(
-            user_input, self.current_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE, cfg.MOTOR_DEFAULT_STEP
-        )
-        if target_angle is not None:
-            print(f"Keyword match suggests angle: {target_angle}")
-            return target_angle
-
-        # 2. If no keyword match, use the LLM as a fallback
-        print("No direct keyword match. Querying LLM...")
+        print("Querying LLM for structured command...")
         self.arduino.send_command(CMD_THINKING_START)
 
         prompt = build_llm_prompt(
-            user_input, self.current_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE, 
-            cfg.MOTOR_DEFAULT_STEP, cfg.MOTOR_INITIAL_ANGLE
+            user_input, self.current_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE
         )
         llm_response_text = send_to_ollama(prompt, cfg.OLLAMA_API_URL, cfg.OLLAMA_MODEL)
 
         if llm_response_text:
-            return parse_angle_from_llm_text(llm_response_text, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE)
+            return parse_llm_response_to_json(llm_response_text)
         
-        print("LLM failed or did not provide a valid angle.")
+        print("LLM failed or did not provide a valid command.")
         return None
 
     def run(self):
@@ -87,17 +76,40 @@ class LlmServoControl:
                 print(f"Angle state reset to: {self.current_angle}")
                 continue
 
-            target_angle = self.get_target_angle(user_input)
+            command_dict = self.get_llm_command(user_input)
 
-            if target_angle is not None:
-                if self.arduino.set_angle(target_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE):
-                    self.current_angle = target_angle
-                    print(f"Motor command processed. New assumed angle: {self.current_angle}")
+            if command_dict and "command" in command_dict:
+                cmd = command_dict.get("command")
+
+                # Python-side logic to handle state changes
+                new_angle = None
+                
+                # Pre-process ADJUST command into a GOTO command
+                if cmd == "ADJUST":
+                    degrees = command_dict.get("degrees", 0)
+                    target_angle = self.current_angle + degrees
+                    # Clamp the angle to the valid range
+                    clamped_angle = max(cfg.MOTOR_MIN_ANGLE, min(cfg.MOTOR_MAX_ANGLE, target_angle))
+                    # Mutate the command to a simple GOTO for the Arduino
+                    command_dict = {"command": "GOTO", "angle": clamped_angle}
+                    print(f"Translated ADJUST to GOTO: {command_dict}")
+
+                # Update local angle state if it's a command that sets a final angle
+                if command_dict.get("command") == "GOTO":
+                    new_angle = command_dict.get("angle")
+
+                # Send the final command to Arduino
+                if self.arduino.send_json_command(command_dict):
+                    if new_angle is not None:
+                        self.current_angle = new_angle
+                        print(f"Motor command sent. New assumed angle: {self.current_angle}")
+                    else: # For commands like SPIN or SWEEP that return to start
+                        print(f"Sequence command '{cmd}' sent. Angle remains: {self.current_angle}")
                 else:
                     print("Failed to send command to Arduino. Angle not updated.")
                     self.arduino.send_command(CMD_IDLE_STATE)
             else:
-                print("AI/Keywords could not determine a valid action. Please try rephrasing.")
+                print("AI could not determine a valid action. Please try rephrasing.")
                 self.arduino.send_command(CMD_IDLE_STATE)
                 
     def shutdown(self):
