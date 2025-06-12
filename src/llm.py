@@ -1,5 +1,6 @@
 import requests
 import re
+import json
 
 def check_ollama_availability():
     """Check if Ollama is running and accessible."""
@@ -22,9 +23,10 @@ def send_to_ollama(prompt_text, api_url, model):
         "model": model,
         "prompt": prompt_text,
         "stream": False,
+        "format": "json", # Instruct Ollama to output JSON directly
         "options": {
             "temperature": 0.2,
-            "num_predict": 20
+            "num_predict": 100
         }
     }
     try:
@@ -36,33 +38,33 @@ def send_to_ollama(prompt_text, api_url, model):
         print(f"Error communicating with Ollama: {e}")
         return None
 
-def parse_angle_from_llm_text(llm_text, min_angle, max_angle):
+def parse_llm_response_to_json(llm_text):
     """
-    Parses a numeric angle from the LLM's response text.
-    Returns an integer angle or None.
+    Parses a JSON command object from the LLM's response text.
+    Returns a dictionary or None.
     """
     print(f"LLM Raw Response: '{llm_text}'")
     if not llm_text:
         return None
-        
-    match = re.search(r'\b(\d{1,3})\b', llm_text)
-    if match:
-        try:
-            angle = int(match.group(1))
-            if min_angle <= angle <= max_angle:
-                print(f"LLM suggests angle: {angle}")
-                return angle
-            else:
-                print(f"LLM angle {angle} is out of range ({min_angle}-{max_angle}).")
-        except ValueError:
-            pass # Should not happen with this regex, but good practice
-    return None
+
+    try:
+        # The 'format: "json"' parameter in send_to_ollama should ensure valid JSON.
+        # This is a robust way to parse it.
+        command_obj = json.loads(llm_text)
+        if "command" in command_obj:
+            print(f"LLM suggests command: {command_obj}")
+            return command_obj
+        else:
+            print("LLM JSON is missing 'command' key.")
+            return None
+    except json.JSONDecodeError:
+        print("LLM response was not valid JSON.")
+        return None
 
 def parse_command_with_keywords(user_input_raw, current_angle, min_angle, max_angle, default_step):
     """
-    Determines a target angle based on keywords in the user's input.
-    This is the fast, non-LLM method.
-    Returns an integer angle or None.
+    DEPRECATED in favor of the LLM's JSON output but kept for reference.
+    This function will no longer be called in the main loop.
     """
     user_input_lower = user_input_raw.lower()
     
@@ -89,20 +91,45 @@ def parse_command_with_keywords(user_input_raw, current_angle, min_angle, max_an
     # If no keywords matched
     return None
 
-def build_llm_prompt(user_input, current_angle, min_angle, max_angle, default_step, initial_angle):
+def build_llm_prompt(user_input, current_angle, min_angle, max_angle):
+    # This prompt is the core of the system. It defines the "API" for the LLM.
     return f"""
-        You are an AI assistant controlling a servo motor with a range of {min_angle} to {max_angle} degrees.
-        The current motor angle is {current_angle} degrees.
-        0 degrees means 'fully closed'. 180 degrees means 'fully open'.
-        The user wants to: "{user_input}"
-        Based on the user's request and the current angle, what should the new target angle be?
-        If the user wants to return to the default or initial condition, assume {initial_angle} degrees.
-        If the user says "a bit" or "slightly", adjust by approximately {default_step} degrees.
-        If the user says "open", unless specified otherwise, assume "fully open" ({max_angle} degrees).
-        If the user says "close", unless specified otherwise, assume "fully closed" ({min_angle} degrees).
-        Respond ONLY with the integer number for the new target angle. For example: 90 or 0 or 180 or 15.
-        Do not add any other text, explanation, or punctuation. Just the number.
-        User: "{user_input}"
-        Current Angle: {current_angle}
-        New Target Angle (JUST THE NUMBER):
-        """
+You are an expert AI assistant that translates natural language commands into a structured JSON format for controlling a servo motor.
+The motor's range is {min_angle} to {max_angle} degrees. The current motor angle is {current_angle} degrees.
+
+Analyze the user's request and create a JSON object with a "command" and its required "parameters".
+
+Available commands are:
+1.  "GOTO": Move to a specific angle.
+    - Parameters: "angle" (integer, {min_angle}-{max_angle}).
+    - Example: "move to 90 degrees" -> {{"command": "GOTO", "angle": 90}}
+    - Note: "open" means {max_angle}, "close" means {min_angle}, "middle" means 90.
+
+2.  "ADJUST": Move by a relative amount of degrees.
+    - Parameters: "degrees" (integer). Positive is clockwise (towards {max_angle}), negative is counter-clockwise (towards {min_angle}).
+    - Example: "turn a little to the right" -> {{"command": "ADJUST", "degrees": 20}}
+    - Example: "move 30 degrees left" -> {{"command": "ADJUST", "degrees": -30}}
+
+3.  "SPIN": Perform full rotations back and forth.
+    - Parameters: "times" (integer, number of full spins).
+    - Note: This action ends at the starting angle.
+    - Example: "spin 3 times" -> {{"command": "SPIN", "times": 3}}
+
+4.  "SWEEP": Move back and forth continuously like a radar.
+    - Parameters: "repetitions" (integer, number of back-and-forth sweeps).
+    - Note: This action ends at the starting angle.
+    - Example: "sweep back and forth 5 times" -> {{"command": "SWEEP", "repetitions": 5}}
+    
+5.  "NOD": Perform a "yes" motion.
+    - Parameters: "times" (integer).
+    - Example: "nod yes" -> {{"command": "NOD", "times": 2}}
+
+6.  "SHAKE": Perform a "no" motion.
+    - Parameters: "times" (integer).
+    - Example: "shake your head" -> {{"command": "SHAKE", "times": 2}}
+
+User Request: "{user_input}"
+Current Angle: {current_angle}
+
+Respond ONLY with the JSON object. Do not add any other text, explanation, or markdown formatting.
+"""
