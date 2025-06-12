@@ -85,6 +85,11 @@ Instead of the LLM outputting the exact angle, you could have it output a comman
 ### SHAKE
 ![Terminal showcasing shake 5 times](terminal-shake5-msg.png)
 ![16x2 LCD Displaying: Action: Shake, Times: 5](display-shake5.jpg)
+
 ## Display commands added
 
 ![Terminal showcasing commands message](terminal-commands-msg.png)
+
+## Mock Arduino for testing implemented
+
+![Terminal showcasing mock arduino system in use](terminal-mock-system-msg.png)
