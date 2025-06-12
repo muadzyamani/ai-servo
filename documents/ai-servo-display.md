@@ -43,18 +43,46 @@ Instead of the LLM outputting the exact angle, you could have it output a comman
 # Log
 ## Servo Control Without Display
 
-![Terminal showcasing the user input and responses from LLM for servo control](terminal-1.png)
+![Terminal showcasing the user input and responses from LLM for servo control](terminal-basic-servo-msg.png)
 
 ## Display incorporated
 
-![Terminal showcasing the user input and responses from LLM for servo control and display](terminal-2.png)
+![Terminal showcasing the user input and responses from LLM for servo control and display](terminal-thinking-msg.png)
 
 ![16x2 LCD Displaying: AI Thinking..](display-ai-thinking.jpg)
 
 ## Speech added
 
-![Terminal showcasing the user input speech and responses](terminal-3.png)
+![Terminal showcasing the user input speech and responses](terminal-speech-msg.png)
 
 ## Reset state included
 
-![alt text](terminal-4.png)
+![alt text](terminal-reset-msg.png)
+
+## Shutdown feature included
+
+![Terminal showcasing the exit command](terminal-exit-msg.png)
+![16x2 LCD Displaying: System Shutting Down...](display-shutdown.jpg)
+
+## Enhanced Servo Features Implemented: GOTO, ADJUST, SPIN, SWEEP, NOD, SHAKE
+### GOTO
+![Terminal showcasing go to 45 degrees](terminal-goto45-msg.png)
+![16x2 LCD Displaying: Moving to Angle 45 deg](display-goto45.jpg)
+### ADJUST
+![Terminal showcasing adjust by 30 degrees](terminal-adjust30-msg.png)
+![16x2 LCD Displaying: Moving to Angle 15 deg](display-adjust30.jpg)
+### SPIN
+![Terminal showcasing spin 4 times](terminal-spin4-msg.png)
+![16x2 LCD Displaying: Action: Spin, Times: 4](display-spin4.jpg)
+### SWEEP
+![Terminal showcasing sweep 3 times](terminal-sweep3-msg.png)
+![16x2 LCD Displaying: Action: Sweep, Times: 3](display-sweep3.jpg)
+### NOD
+![Terminal showcasing nod 2 times](terminal-nod2-msg.png)
+![16x2 LCD Displaying: Action: Nod, Times: 2](display-nod2.jpg)
+### SHAKE
+![Terminal showcasing shake 5 times](terminal-shake5-msg.png)
+![16x2 LCD Displaying: Action: Shake, Times: 5](display-shake5.jpg)
+## Display commands added
+
+![Terminal showcasing commands message](terminal-commands-msg.png)
