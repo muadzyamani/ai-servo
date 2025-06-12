@@ -40,6 +40,8 @@ Instead of the LLM outputting the exact angle, you could have it output a comman
 
 **Latency**: There will be some latency (CLI input -> Python -> Ollama -> Python -> Arduino -> Motor moves). For simple open/close, this is fine.
 
+**Computer Vision and Machine Learning**: Use camera to detect a number of symbol that would then correspond to a particular action or command.
+
 # Log
 ## Servo Control Without Display
 
