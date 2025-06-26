@@ -5,6 +5,7 @@
 
 // --- Function Prototypes (Declarations) ---
 void displayWelcomeMessage();
+void displayAwaitingAuth();
 void displayIdle();
 void displayThinking();
 void displayActionStatus(String line1, String line2);
