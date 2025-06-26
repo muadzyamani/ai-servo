@@ -2,15 +2,16 @@
 #include "config.h"
 #include "display_functions.h"
 #include "servo_actions.h"
+#include "rfid_functions.h"
 
 //==============================================================================
 // GLOBAL VARIABLE DEFINITIONS
-// This is where the variables declared as "extern" in config.h actually live.
 //==============================================================================
 
 // --- Object Instances ---
 Servo myservo;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+MFRC522 mfrc522(rfidSdaPin, rfidRstPin); 
 
 // --- State Variables ---
 DisplayState currentDisplayState = WELCOME_SEQUENCE;
@@ -21,6 +22,7 @@ unsigned long lastWelcomeTime = 0;
 unsigned long lastAnimationTime = 0;
 unsigned long actionDisplayStartTime = 0;
 unsigned long shutdownStartTime = 0;
+unsigned long rfidDisplayStartTime = 0; 
 
 // --- Content/Animation Variables ---
 int welcomeMessageIndex = 0;
@@ -47,7 +49,11 @@ void setup() {
   digitalWrite(backlightPin, HIGH);
   lcd.begin(16, 2);
 
-  displayWelcomeMessage(); // Function is now in display_functions.cpp
+  SPI.begin();           // Init SPI bus
+  mfrc522.PCD_Init();    // Init MFRC522 card
+  Serial.println("RFID Reader Initialized.");
+
+  displayWelcomeMessage();
 
   Serial.println("Arduino Ready. JSON Parser Initialized.");
 }
@@ -57,6 +63,10 @@ void setup() {
 // MAIN LOOP - The heart of the program
 //==============================================================================
 void loop() {
+  if (currentDisplayState == IDLE || currentDisplayState == EXECUTING_ACTION || currentDisplayState == RFID_DETECTED) {
+     handleRfid();
+  }
+
   // --- Part 1: Process Incoming Serial Data ---
   if (Serial.available() > 0) {
     String input = Serial.readStringUntil('\n');
@@ -124,6 +134,10 @@ void loop() {
     if (millis() - actionDisplayStartTime > actionDisplayDuration) {
       displayIdle();
     }
+  } else if (currentDisplayState == RFID_DETECTED) {
+    if (millis() - rfidDisplayStartTime > rfidDisplayDuration) {
+        displayIdle();
+    }
   } else if (currentDisplayState == SHUTTING_DOWN) {
     if (millis() - shutdownStartTime > shutdownDisplayDuration) {
       lcd.clear();
@@ -132,4 +146,5 @@ void loop() {
       while (1) {}
     }
   }
+  
 }
