@@ -8,13 +8,14 @@
 // GLOBAL VARIABLE DEFINITIONS
 //==============================================================================
 
+// ... (Object Instances, State Variables, Timer Variables, Content Variables are unchanged)
 // --- Object Instances ---
 Servo myservo;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 MFRC522 mfrc522(rfidSdaPin, rfidRstPin); 
 
 // --- State Variables ---
-DisplayState currentDisplayState = WELCOME_SEQUENCE;
+DisplayState currentDisplayState = WELCOME_SEQUENCE; // Starts at welcome, but Python will override
 int currentAngle = INITIAL_ANGLE;
 
 // --- Timer Variables ---
@@ -51,11 +52,11 @@ void setup() {
 
   SPI.begin();           // Init SPI bus
   mfrc522.PCD_Init();    // Init MFRC522 card
-  Serial.println("RFID Reader Initialized.");
+  
+  displayWelcomeMessage(); // Show initial welcome message
 
-  displayWelcomeMessage();
-
-  Serial.println("Arduino Ready. JSON Parser Initialized.");
+  Serial.println("Arduino Ready. To find your card UID for config.py,");
+  Serial.println("run main.py and scan your card now.");
 }
 
 
@@ -63,7 +64,8 @@ void setup() {
 // MAIN LOOP - The heart of the program
 //==============================================================================
 void loop() {
-  if (currentDisplayState == IDLE || currentDisplayState == EXECUTING_ACTION || currentDisplayState == RFID_DETECTED) {
+  // Only call normal RFID handler in these states
+  if (currentDisplayState == IDLE || currentDisplayState == EXECUTING_ACTION) {
      handleRfid();
   }
 
@@ -72,7 +74,17 @@ void loop() {
     String input = Serial.readStringUntil('\n');
     input.trim();
 
-    if (input.equalsIgnoreCase("THINKING_START")) {
+    if (input.equalsIgnoreCase("AWAIT_AUTH_CMD")) {
+      currentDisplayState = AWAITING_AUTH;
+      displayAwaitingAuth();
+    } else if (input.equalsIgnoreCase("AUTH_SUCCESS_CMD")) {
+      lcd.clear();
+      lcd.setCursor(0, 0); lcd.print("Authenticated!");
+      currentAngle = INITIAL_ANGLE; // Ensure motor is at home pos
+      myservo.write(currentAngle);
+      delay(2000); // Show message for 2 seconds
+      displayIdle();
+    } else if (input.equalsIgnoreCase("THINKING_START")) {
       currentDisplayState = THINKING;
       animationFrame = 0;
       lastAnimationTime = millis();
@@ -117,11 +129,13 @@ void loop() {
   }
 
   // --- Part 2: Handle Display State Updates ---
-  if (currentDisplayState == WELCOME_SEQUENCE) {
+  if (currentDisplayState == AWAITING_AUTH) {
+    handleAuthenticationScan(); // Continuously look for a card to send to Python
+  } else if (currentDisplayState == WELCOME_SEQUENCE) {
     if (millis() - lastWelcomeTime > welcomeInterval) {
       welcomeMessageIndex = (welcomeMessageIndex + 2);
       if (welcomeMessageIndex >= numWelcomeLines) {
-        displayIdle();
+        displayIdle(); // This will likely be overridden by Python's auth command
       } else {
         displayWelcomeMessage();
       }
@@ -146,5 +160,4 @@ void loop() {
       while (1) {}
     }
   }
-  
 }
