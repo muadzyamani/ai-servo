@@ -2,23 +2,30 @@
 #define CONFIG_H
 
 // --- Standard Arduino & Library Includes ---
-#include <Arduino.h> // Good practice to include for types like String, etc.
+#include <Arduino.h>
 #include <Servo.h>
 #include <LiquidCrystal.h>
 #include <ArduinoJson.h>
+#include <SPI.h>
+#include <MFRC522.h>
 
 // --- Servo Configuration ---
-extern Servo myservo; // Declare that 'myservo' exists elsewhere
+extern Servo myservo;
 const int servoPin = 9;
 const int INITIAL_ANGLE = 90;
-extern int currentAngle; // Declare global variable
+extern int currentAngle;
 const int MIN_ANGLE = 0;
 const int MAX_ANGLE = 180;
 
 // --- LCD Pin Configuration ---
 const int backlightPin = 10;
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-extern LiquidCrystal lcd; // Declare that 'lcd' exists elsewhere
+const int rs = A0, en = 6, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+extern LiquidCrystal lcd;
+
+// --- MFRC522 RFID Pin Configuration ---
+const int rfidRstPin = 8;
+const int rfidSdaPin = 7;
+extern MFRC522 mfrc522;     // Declare that 'mfrc522' exists elsewhere
 
 // --- State Management ---
 enum DisplayState {
@@ -26,9 +33,10 @@ enum DisplayState {
   IDLE,
   THINKING,
   EXECUTING_ACTION,
-  SHUTTING_DOWN
+  SHUTTING_DOWN,
+  RFID_DETECTED
 };
-extern DisplayState currentDisplayState; // Declare global variable
+extern DisplayState currentDisplayState;
 
 // --- Timers and Constants for States ---
 
@@ -54,5 +62,9 @@ const unsigned long actionDisplayDuration = 3000;
 // SHUTTING_DOWN State
 extern unsigned long shutdownStartTime;
 const unsigned long shutdownDisplayDuration = 3000;
+
+// RFID_DETECTED State // <-- NEW
+extern unsigned long rfidDisplayStartTime;
+const unsigned long rfidDisplayDuration = 4000; // Show UID for 4 seconds
 
 #endif // CONFIG_H
