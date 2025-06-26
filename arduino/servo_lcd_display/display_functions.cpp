@@ -16,6 +16,14 @@ void displayWelcomeMessage() {
   lastWelcomeTime = millis();
 }
 
+void displayAwaitingAuth() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Please Scan Card");
+  lcd.setCursor(0, 1);
+  lcd.print("to Authenticate");
+}
+
 void displayIdle() {
   lcd.clear();
   lcd.setCursor(0, 0);
