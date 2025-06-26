@@ -1,7 +1,10 @@
 import time
 import src.config as cfg
 from src.voice import listen_for_voice_command_google
-from src.arduino import ArduinoController, CMD_THINKING_START, CMD_IDLE_STATE, CMD_RESET_STATE, CMD_SHUTDOWN
+from src.arduino import (
+    ArduinoController, CMD_THINKING_START, CMD_IDLE_STATE,
+    CMD_RESET_STATE, CMD_SHUTDOWN, CMD_AWAIT_AUTH, CMD_AUTH_SUCCESS
+)
 from src.llm import (
     build_llm_prompt,
     check_ollama_availability,
@@ -29,6 +32,42 @@ class LlmServoControl:
             
         return True
 
+    def authenticate(self):
+        """
+        Handles the RFID authentication flow before starting the main app.
+        Returns True on success, False on failure/timeout.
+        """
+        print("\n--- Awaiting Authentication ---")
+        print("Please scan an authorized RFID card on the reader.")
+        self.arduino.send_command(CMD_AWAIT_AUTH)
+
+        # Define the correct, full prefix the Arduino sends
+        auth_prefix = "Card detected for auth! UID:"
+
+        while True: # Loop to allow multiple scan attempts
+            # Wait for the correct prefix
+            uid = self.arduino.wait_for_response(auth_prefix, timeout=60)
+
+            if uid is None:
+                print("\nAuthentication timed out. No card scanned.")
+                return False
+
+            uid_lower = uid.lower()
+
+            # --- DEBUGGING LINES ---
+            # print(f"DEBUG: Checking for UID: '{uid_lower}'")
+            # print(f"DEBUG: Available keys in config: {list(cfg.AUTHORIZED_UIDS.keys())}")
+            # --- END OF DEBUGGING LINES ---
+
+            if uid_lower in cfg.AUTHORIZED_UIDS:
+                user = cfg.AUTHORIZED_UIDS[uid_lower]
+                print(f"Authentication successful! Welcome, {user}.")
+                self.arduino.send_command(CMD_AUTH_SUCCESS)
+                time.sleep(2) # Give Arduino time to display the message
+                return True
+            else:
+                print(f"Unauthorized card scanned (UID: {uid}). Please try again.")
+
     def get_llm_command(self, user_input):
         """
         Determines the target command from user input by querying the LLM.
@@ -49,6 +88,7 @@ class LlmServoControl:
     
     def display_command_help(self):
         """Prints a formatted help screen with available commands and examples."""
+        # ... (This function remains unchanged)
         print("\n--- Available Commands & Examples ---")
         print("The AI can interpret a wide range of natural language phrases.")
         print("Here are the primary actions it can perform:\n")
@@ -79,6 +119,7 @@ class LlmServoControl:
         print(f"Current motor angle assumed to be: {self.current_angle}")
 
         while True:
+            # ... (The rest of this function remains unchanged)
             mode_input = input("You: ").strip()
 
             if mode_input.lower() == 'speech':
@@ -153,9 +194,14 @@ if __name__ == "__main__":
     app = LlmServoControl()
     
     if app.setup():
-        try:
-            app.run()
-        except KeyboardInterrupt:
-            print("\nExiting due to user interruption...")
-        finally:
+        # --- NEW AUTHENTICATION FLOW ---
+        if app.authenticate():
+            try:
+                app.run()
+            except KeyboardInterrupt:
+                print("\nExiting due to user interruption...")
+            finally:
+                app.shutdown()
+        else:
+            print("Authentication failed. Shutting down.")
             app.shutdown()
