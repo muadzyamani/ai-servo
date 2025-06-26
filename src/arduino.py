@@ -7,6 +7,9 @@ CMD_THINKING_START = "THINKING_START"
 CMD_IDLE_STATE = "IDLE_STATE"
 CMD_RESET_STATE = "RESET_STATE"
 CMD_SHUTDOWN = "SHUTDOWN_CMD"
+CMD_AWAIT_AUTH = "AWAIT_AUTH_CMD"
+CMD_AUTH_SUCCESS = "AUTH_SUCCESS_CMD"
+
 
 class ArduinoController:
     """
@@ -29,7 +32,6 @@ class ArduinoController:
     
     def connect(self):
         """Establishes the serial connection or simulates it if in mock mode."""
-        #
         if self.mock_mode:
             print(f"MOCK: Simulating connection to Arduino on {self.port}...")
             self._is_mock_connected = True
@@ -50,11 +52,9 @@ class ArduinoController:
         
     def _clear_initial_buffer(self):
         """Clears any startup messages from the Arduino buffer."""
-        if not self.is_connected():
+        if not self.is_connected() or self.mock_mode:
             return
-        # This check prevents trying to access self.ser in mock mode
-        if self.mock_mode:
-            return
+        time.sleep(0.1)
         while self.ser.in_waiting > 0:
             init_msg = self.ser.readline().decode('utf-8', errors='ignore').strip()
             if init_msg:
@@ -79,14 +79,42 @@ class ArduinoController:
             return True
 
         try:
-            print(f"Sending control command to Arduino: {command_str}")
+            # print(f"Sending control command to Arduino: {command_str}") # Less verbose for this one
             self.ser.write(f"{command_str.strip()}\n".encode('utf-8'))
             time.sleep(0.05)
-            self._read_response()
+            # No response read here, it's a fire-and-forget command
             return True
         except serial.SerialException as e:
             print(f"Error writing control command to Arduino: {e}")
             return False
+
+    def wait_for_response(self, prefix, timeout=30):
+        """
+        Waits for a specific response line from the Arduino.
+        Returns the data part of the response, or None on timeout.
+        """
+        if not self.is_connected():
+            return None
+
+        if self.mock_mode:
+            print("MOCK: Waiting for response...")
+            time.sleep(1)
+            # Get the first key from the authorized UIDs to simulate success
+            mock_uid = next(iter(cfg.AUTHORIZED_UIDS))
+            print(f"MOCK Arduino: {prefix}{mock_uid}")
+            return mock_uid
+
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if self.ser.in_waiting > 0:
+                line = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                if line.startswith(prefix):
+                    print(f"Arduino response received: {line}")
+                    return line[len(prefix):].strip()
+            time.sleep(0.1) # Don't spam the CPU
+        
+        print("Timed out waiting for Arduino response.")
+        return None
 
     def send_json_command(self, command_dict):
         """Serializes a dictionary to a JSON string and sends it, or simulates it."""
@@ -96,7 +124,6 @@ class ArduinoController:
         
         json_string = json.dumps(command_dict)
         
-
         if self.mock_mode:
             print(f"MOCK: Sending JSON command to Arduino: {json_string}")
             print("MOCK Arduino: JSON_RECEIVED")
@@ -112,14 +139,8 @@ class ArduinoController:
             print(f"Error writing JSON command to Arduino: {e}")
             return False
 
-    def set_angle(self, angle, min_angle, max_angle):
-        clamped_angle = max(min_angle, min(max_angle, int(angle)))
-        command_dict = {"command": "GOTO", "angle": clamped_angle}
-        return self.send_json_command(command_dict)
-
     def _read_response(self):
         """Reads and prints all available lines from the Arduino."""
-
         if self.mock_mode or not self.is_connected():
             return
             
