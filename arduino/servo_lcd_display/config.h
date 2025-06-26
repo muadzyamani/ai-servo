@@ -1,7 +1,6 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// --- Standard Arduino & Library Includes ---
 #include <Arduino.h>
 #include <Servo.h>
 #include <LiquidCrystal.h>
@@ -25,11 +24,12 @@ extern LiquidCrystal lcd;
 // --- MFRC522 RFID Pin Configuration ---
 const int rfidRstPin = 8;
 const int rfidSdaPin = 7;
-extern MFRC522 mfrc522;     // Declare that 'mfrc522' exists elsewhere
+extern MFRC522 mfrc522;
 
 // --- State Management ---
 enum DisplayState {
   WELCOME_SEQUENCE,
+  AWAITING_AUTH,
   IDLE,
   THINKING,
   EXECUTING_ACTION,
@@ -63,8 +63,8 @@ const unsigned long actionDisplayDuration = 3000;
 extern unsigned long shutdownStartTime;
 const unsigned long shutdownDisplayDuration = 3000;
 
-// RFID_DETECTED State // <-- NEW
+// RFID_DETECTED State
 extern unsigned long rfidDisplayStartTime;
-const unsigned long rfidDisplayDuration = 4000; // Show UID for 4 seconds
+const unsigned long rfidDisplayDuration = 4000;
 
 #endif // CONFIG_H
