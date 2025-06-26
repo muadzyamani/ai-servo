@@ -1,15 +1,17 @@
 #ifndef RFID_FUNCTIONS_H
 #define RFID_FUNCTIONS_H
 
-#include "config.h" // Include main configuration for access to states, timers, etc.
+#include "config.h" 
 
 /**
- * @brief Checks for a new RFID card and handles the detection event.
- * 
- * This function should be called repeatedly in the main loop. If a new card
- * is detected, it updates the system state, displays the UID on the LCD,
- * triggers a physical feedback action (nod), and halts the card to prevent
- * immediate re-scans.
+ * @brief Handles scanning for a card during the initial authentication phase.
+ * If a card is found, its UID is printed to the Serial port for Python to read.
+ */
+void handleAuthenticationScan();
+
+/**
+ * @brief Checks for a new RFID card during normal operation.
+ * Displays UID on LCD and performs a nod action.
  */
 void handleRfid();
 
