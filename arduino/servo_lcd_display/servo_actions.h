@@ -9,5 +9,6 @@ void executeSpin(int times);
 void executeSweep(int repetitions);
 void executeNod(int times);
 void executeShake(int times);
+void executeShakeSilent(int times);
 
 #endif // SERVO_ACTIONS_H
