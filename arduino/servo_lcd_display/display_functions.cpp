@@ -1,4 +1,5 @@
 #include "display_functions.h" // Include the header for this implementation
+#include <string.h>
 
 //==============================================================================
 // DISPLAY HELPER FUNCTIONS - For updating the LCD
@@ -36,7 +37,10 @@ void displayIdle() {
 void displayThinking() {
   lcd.setCursor(0, 0);
   lcd.print(thinkingText);
-  lcd.setCursor(thinkingText.length(), 0);
+  // "Before"
+  // lcd.setCursor(thinkingText.length(), 0);
+  // "After" - Use strlen() for C-style strings
+  lcd.setCursor(strlen(thinkingText), 0);
   lcd.print(thinkingFrames[animationFrame]);
 
   animationFrame = (animationFrame + 1) % numThinkingFrames;
