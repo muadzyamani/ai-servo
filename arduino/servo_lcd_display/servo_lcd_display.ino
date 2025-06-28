@@ -1,3 +1,5 @@
+// servo_lcd_display.ino
+
 // Include all our custom header files
 #include "config.h"
 #include "display_functions.h"
@@ -8,14 +10,13 @@
 // GLOBAL VARIABLE DEFINITIONS
 //==============================================================================
 
-// ... (Object Instances, State Variables, Timer Variables, Content Variables are unchanged)
 // --- Object Instances ---
 Servo myservo;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 MFRC522 mfrc522(rfidSdaPin, rfidRstPin); 
 
 // --- State Variables ---
-DisplayState currentDisplayState = WELCOME_SEQUENCE; // Starts at welcome, but Python will override
+DisplayState currentDisplayState = WELCOME_SEQUENCE;
 int currentAngle = INITIAL_ANGLE;
 
 // --- Timer Variables ---
@@ -24,18 +25,23 @@ unsigned long lastAnimationTime = 0;
 unsigned long actionDisplayStartTime = 0;
 unsigned long shutdownStartTime = 0;
 unsigned long rfidDisplayStartTime = 0; 
+unsigned long authFailDisplayStartTime = 0;
 
-// --- Content/Animation Variables ---
+// --- Content/Animation Variables (USING C-STRINGS TO SAVE SRAM) ---
 int welcomeMessageIndex = 0;
-String welcomeLines[] = {
+const char* welcomeLines[] = {
     "Hello, User", "I am Phi3:mini", "Welcome!", "Nice to meet you",
     "Ready for your", "command..."};
-const int numWelcomeLines = sizeof(welcomeLines) / sizeof(String);
+// "Before" was in config.h
+// "After" - Define the variable here where the array is defined
+int numWelcomeLines = sizeof(welcomeLines) / sizeof(const char*);
 
 int animationFrame = 0;
-String thinkingText = "AI Thinking";
-String thinkingFrames[] = {".  ", ".. ", "..."};
-const int numThinkingFrames = sizeof(thinkingFrames) / sizeof(String);
+const char* thinkingText = "AI Thinking";
+const char* thinkingFrames[] = {".  ", ".. ", "..."};
+// "Before" was in config.h
+// "After" - Define the variable here where the array is defined
+int numThinkingFrames = sizeof(thinkingFrames) / sizeof(const char*);
 
 
 //==============================================================================
@@ -50,13 +56,14 @@ void setup() {
   digitalWrite(backlightPin, HIGH);
   lcd.begin(16, 2);
 
-  SPI.begin();           // Init SPI bus
-  mfrc522.PCD_Init();    // Init MFRC522 card
+  SPI.begin();
+  mfrc522.PCD_Init();
   
-  displayWelcomeMessage(); // Show initial welcome message
+  displayWelcomeMessage();
 
-  Serial.println("Arduino Ready. To find your card UID for config.py,");
-  Serial.println("run main.py and scan your card now.");
+  // Use F() macro to keep strings in Flash memory instead of SRAM
+  Serial.println(F("Arduino Ready. To find your card UID for config.py,"));
+  Serial.println(F("run main.py and scan your card now."));
 }
 
 
@@ -64,12 +71,10 @@ void setup() {
 // MAIN LOOP - The heart of the program
 //==============================================================================
 void loop() {
-  // Only call normal RFID handler in these states
   if (currentDisplayState == IDLE || currentDisplayState == EXECUTING_ACTION) {
      handleRfid();
   }
 
-  // --- Part 1: Process Incoming Serial Data ---
   if (Serial.available() > 0) {
     String input = Serial.readStringUntil('\n');
     input.trim();
@@ -77,41 +82,57 @@ void loop() {
     if (input.equalsIgnoreCase("AWAIT_AUTH_CMD")) {
       currentDisplayState = AWAITING_AUTH;
       displayAwaitingAuth();
-    } else if (input.equalsIgnoreCase("AUTH_SUCCESS_CMD")) {
+    }
+    else if (input.equalsIgnoreCase("AUTH_FAIL_CMD")) {
+      currentDisplayState = AUTH_FAILURE;
+      authFailDisplayStartTime = millis();
       lcd.clear();
-      lcd.setCursor(0, 0); lcd.print("Authenticated!");
-      currentAngle = INITIAL_ANGLE; // Ensure motor is at home pos
+      lcd.print(F("Access Denied!"));
+      executeShakeSilent(1);
+    }
+    else if (input.equalsIgnoreCase("AUTH_SUCCESS_CMD")) {
+      lcd.clear();
+      lcd.print(F("Authenticated!"));
+      currentAngle = INITIAL_ANGLE;
       myservo.write(currentAngle);
-      delay(2000); // Show message for 2 seconds
+      delay(2000);
       displayIdle();
-    } else if (input.equalsIgnoreCase("THINKING_START")) {
+    }
+    else if (input.equalsIgnoreCase("THINKING_START")) {
       currentDisplayState = THINKING;
       animationFrame = 0;
       lastAnimationTime = millis();
       lcd.clear();
-    } else if (input.equalsIgnoreCase("IDLE_STATE")) {
+    }
+    else if (input.equalsIgnoreCase("IDLE_STATE")) {
       displayIdle();
-    } else if (input.equalsIgnoreCase("RESET_STATE")) {
-      Serial.println("System reset command received.");
+    }
+    else if (input.equalsIgnoreCase("RESET_STATE")) {
+      Serial.println(F("System reset command received."));
       currentAngle = INITIAL_ANGLE;
       myservo.write(currentAngle);
       currentDisplayState = WELCOME_SEQUENCE;
       welcomeMessageIndex = 0;
       displayWelcomeMessage();
-    } else if (input.equalsIgnoreCase("SHUTDOWN_CMD")) {
-      Serial.println("Shutdown command received.");
+    }
+    else if (input.equalsIgnoreCase("SHUTDOWN_CMD")) {
+      Serial.println(F("Shutdown command received."));
       myservo.write(INITIAL_ANGLE);
       currentDisplayState = SHUTTING_DOWN;
       shutdownStartTime = millis();
       lcd.clear();
-      lcd.setCursor(0, 0); lcd.print("System");
-      lcd.setCursor(0, 1); lcd.print("Shutting Down...");
-    } else {
-      StaticJsonDocument<256> doc;
+      lcd.setCursor(0, 0); lcd.print(F("System"));
+      lcd.setCursor(0, 1); lcd.print(F("Shutting Down..."));
+    }
+    else {
+      // --- INCREASED JSON DOCUMENT SIZE FOR ROBUSTNESS ---
+      StaticJsonDocument<384> doc;
       DeserializationError error = deserializeJson(doc, input);
 
       if (error) {
         Serial.print(F("JSON Parse Error: ")); Serial.println(error.c_str());
+        // "Before" was okay because input was a String
+        // "After" - input is a String, which is fine
         displayActionStatus("JSON Parse Err!", input);
       } else {
         const char* command = doc["command"];
@@ -121,42 +142,55 @@ void loop() {
         else if (strcmp(command, "NOD") == 0)   { executeNod(doc["times"] | 2); }
         else if (strcmp(command, "SHAKE") == 0) { executeShake(doc["times"] | 2); }
         else {
-          Serial.print("Unknown JSON command: "); Serial.println(command);
-          displayActionStatus("Unknown Command", command);
+          Serial.print(F("Unknown JSON command: ")); Serial.println(command);
+          // "Before" command was a const char*
+          // "After" - Explicitly cast it to a String for the function
+          displayActionStatus("Unknown Command", String(command));
         }
       }
     }
   }
 
   // --- Part 2: Handle Display State Updates ---
-  if (currentDisplayState == AWAITING_AUTH) {
-    handleAuthenticationScan(); // Continuously look for a card to send to Python
-  } else if (currentDisplayState == WELCOME_SEQUENCE) {
+  if (currentDisplayState == AUTH_FAILURE) {
+    if (millis() - authFailDisplayStartTime > authFailDisplayDuration) {
+      displayAwaitingAuth(); 
+      currentDisplayState = AWAITING_AUTH;
+    }
+  }
+  else if (currentDisplayState == AWAITING_AUTH) {
+    handleAuthenticationScan();
+  }
+  else if (currentDisplayState == WELCOME_SEQUENCE) {
     if (millis() - lastWelcomeTime > welcomeInterval) {
       welcomeMessageIndex = (welcomeMessageIndex + 2);
       if (welcomeMessageIndex >= numWelcomeLines) {
-        displayIdle(); // This will likely be overridden by Python's auth command
+        displayIdle();
       } else {
         displayWelcomeMessage();
       }
     }
-  } else if (currentDisplayState == THINKING) {
+  }
+  else if (currentDisplayState == THINKING) {
     if (millis() - lastAnimationTime > animationInterval) {
       displayThinking();
     }
-  } else if (currentDisplayState == EXECUTING_ACTION) {
+  }
+  else if (currentDisplayState == EXECUTING_ACTION) {
     if (millis() - actionDisplayStartTime > actionDisplayDuration) {
       displayIdle();
     }
-  } else if (currentDisplayState == RFID_DETECTED) {
+  }
+  else if (currentDisplayState == RFID_DETECTED) {
     if (millis() - rfidDisplayStartTime > rfidDisplayDuration) {
         displayIdle();
     }
-  } else if (currentDisplayState == SHUTTING_DOWN) {
+  }
+  else if (currentDisplayState == SHUTTING_DOWN) {
     if (millis() - shutdownStartTime > shutdownDisplayDuration) {
       lcd.clear();
       digitalWrite(backlightPin, LOW);
-      Serial.println("Display off. Halting execution.");
+      Serial.println(F("Display off. Halting execution."));
       while (1) {}
     }
   }
