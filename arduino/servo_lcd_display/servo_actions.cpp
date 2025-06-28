@@ -72,3 +72,24 @@ void executeShake(int times) {
   currentAngle = center;
   Serial.println("Shake sequence complete.");
 }
+
+/**
+ * @brief Performs the shake motion without changing the LCD or system state.
+ * This is a "silent" action used for feedback during other states.
+ */
+void executeShakeSilent(int times) {
+  int center = 90;
+  int shake_range = 45;
+  int shake_movements = times * 6;
+  randomSeed(analogRead(A0));
+  myservo.write(center); delay(200);
+  for (int i = 0; i < shake_movements; i++) {
+    int randomAngle = random(center - shake_range, center + shake_range + 1);
+    int randomDelay = random(70, 150);
+    myservo.write(randomAngle);
+    delay(randomDelay);
+  }
+  myservo.write(center);
+  // Note: We do NOT update currentAngle here because the calling
+  // function might not want the center angle to be assumed.
+}
