@@ -3,7 +3,7 @@ import src.config as cfg
 from src.voice import listen_for_voice_command_google
 from src.arduino import (
     ArduinoController, CMD_THINKING_START, CMD_IDLE_STATE,
-    CMD_RESET_STATE, CMD_SHUTDOWN, CMD_AWAIT_AUTH, CMD_AUTH_SUCCESS
+    CMD_RESET_STATE, CMD_SHUTDOWN, CMD_AWAIT_AUTH, CMD_AUTH_SUCCESS, CMD_AUTH_FAIL
 )
 from src.llm import (
     build_llm_prompt,
@@ -67,6 +67,7 @@ class LlmServoControl:
                 return True
             else:
                 print(f"Unauthorized card scanned (UID: {uid}). Please try again.")
+                self.arduino.send_command(CMD_AUTH_FAIL)
 
     def get_llm_command(self, user_input):
         """
@@ -115,7 +116,7 @@ class LlmServoControl:
 
     def run(self):
         """The main application loop for user interaction."""
-        print("\nMotor Control CLI. Type 'speech' for voice, 'reset' for default, or 'exit' to quit.")
+        print("\nMotor Control CLI. Type 'speech' for voice, 'reset' for default, 'help' for list of commands or 'exit' to quit.")
         print(f"Current motor angle assumed to be: {self.current_angle}")
 
         while True:
@@ -143,7 +144,7 @@ class LlmServoControl:
                 print(f"Angle state reset to: {self.current_angle}")
                 continue
 
-            if user_input.lower() == 'commands':
+            if user_input.lower() == 'help':
                 self.display_command_help()
                 continue
 
@@ -194,7 +195,17 @@ if __name__ == "__main__":
     app = LlmServoControl()
     
     if app.setup():
-        # --- NEW AUTHENTICATION FLOW ---
+        print("\n-------------------------------------------")
+        print("System connected. Arduino is in idle mode.")
+        print("Type 'begin' to start authentication.")
+        print("-------------------------------------------")
+        while True:
+            command = input("> ").strip().lower()
+            if command == 'begin':
+                break
+            else:
+                print("Invalid command. Please type 'begin' to continue.")
+
         if app.authenticate():
             try:
                 app.run()
