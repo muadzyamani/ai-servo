@@ -93,3 +93,39 @@ Instead of the LLM outputting the exact angle, you could have it output a comman
 ## Mock Arduino for testing implemented
 
 ![Terminal showcasing mock arduino system in use](terminal-mock-system-msg.png)
+
+## Authentication for using MFRC522 RFID Module incorporated
+
+![Terminal showcasing RFID Module in use](terminal-rfid-module-msg.png)
+
+![16x2 LCD Displaying: Please Scan Card to Authenticate](display-auth.jpg)
+
+![16x2 LCD Displaying: Authenticated!](display-auth-authenticated.jpg)
+
+![16x2 LCD Displaying: Access Denied!](display-auth-access-denied.jpg)
+
+
+## Fixed issues related to memory usage
+
+### Debugging Log
+
+#### Issue 1: `JSON Parse Error: NoMemory` and Unresponsive Servo
+
+*   **Symptom:** After authenticating, the system would print `JSON Parse Error: NoMemory` for every command received from the LLM. The servo motor would not move.
+*   **Root Cause:** The Arduino's limited SRAM (2KB) was being exhausted. The use of the `String` class for welcome messages and animation frames consumed a large portion of available memory, leaving insufficient space to create the JSON document for parsing new commands.
+*   **Fix:**
+    1.  **Memory Optimization:** Replaced memory-intensive `String` objects and arrays with C-style strings (`const char*`) in `servo_lcd_display.ino`.
+    2.  **Flash Memory Usage:** Implemented the `F()` macro for all constant string literals (e.g., `Serial.println(F("Ready"));`) to store them in the Arduino's larger Flash memory instead of SRAM.
+    3.  **Increased Buffer:** After freeing up SRAM, the `StaticJsonDocument` size was increased from `256` to `384` bytes to handle potentially larger LLM responses more robustly.
+
+#### Issue 2: Compilation Errors After Memory Fix
+
+*   **Symptom:** The code failed to compile after changing variables from `String` to `const char*`, citing errors like `request for member 'length'`, `conflicting declaration`, and `invalid application of 'sizeof'`.
+*   **Root Cause:** The code refactor was incomplete.
+    *   Functions were still trying to use `String` methods (like `.length()`) on C-style strings.
+    *   Header file declarations (`extern String`) no longer matched the definitions (`const char*`) in the `.ino` file.
+    *   `sizeof` could no longer determine array sizes from the header file alone.
+*   **Fix:**
+    1.  **Corrected Function Calls:** Replaced `.length()` with the standard C function `strlen()` in `display_functions.cpp` after including the `<string.h>` library.
+    2.  **Synchronized Declarations:** Updated the `extern` variable declarations in `config.h` to use `const char*` to match their definitions.
+    3.  **Centralized Definitions:** Moved the calculation of array sizes (`numWelcomeLines`, etc.) from `config.h` into `servo_lcd_display.ino`, where the arrays are actually defined and their size is known at compile time.
