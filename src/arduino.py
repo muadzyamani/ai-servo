@@ -93,17 +93,32 @@ class ArduinoController:
         """
         Waits for a specific response line from the Arduino.
         Returns the data part of the response, or None on timeout.
+        
+        In mock mode, this method can simulate different RFID scenarios:
+        - If BYPASS_RFID_AUTH is True, it returns a valid UID immediately
+        - If BYPASS_RFID_AUTH is False, it can simulate various auth scenarios
         """
         if not self.is_connected():
             return None
 
         if self.mock_mode:
             print("MOCK: Waiting for response...")
+            
+            # If we're in mock mode but NOT bypassing RFID, simulate the full auth process
+            if not cfg.BYPASS_RFID_AUTH and prefix == "Card detected for auth! UID:":
+                return self._simulate_rfid_auth_scenarios()
+            
+            # For non-RFID responses or when bypassing RFID, return success
             time.sleep(1)
-            # Get the first key from the authorized UIDs to simulate success
-            mock_uid = next(iter(cfg.AUTHORIZED_UIDS))
-            print(f"MOCK Arduino: {prefix}{mock_uid}")
-            return mock_uid
+            if prefix == "Card detected for auth! UID:":
+                # Return a valid UID for successful auth
+                mock_uid = next(iter(cfg.AUTHORIZED_UIDS))
+                print(f"MOCK Arduino: {prefix}{mock_uid}")
+                return mock_uid
+            else:
+                # For other types of responses, return a generic success
+                print(f"MOCK Arduino: {prefix}SUCCESS")
+                return "SUCCESS"
 
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -116,6 +131,38 @@ class ArduinoController:
         
         print("Timed out waiting for Arduino response.")
         return None
+
+    def _simulate_rfid_auth_scenarios(self):
+        """
+        Simulates different RFID authentication scenarios for testing.
+        This allows testing the full authentication flow even in mock mode.
+        """
+        print("MOCK: Simulating RFID card scan scenarios...")
+        print("MOCK: Options - (1) Valid card, (2) Invalid card, (3) Timeout")
+        print("MOCK: Auto-selecting scenario...")
+        
+        # You can modify this logic to test different scenarios
+        # For now, let's simulate a mix of scenarios
+        import random
+        scenario = random.choice([1, 1, 1, 2])  # Mostly valid, sometimes invalid
+        
+        if scenario == 1:
+            # Valid card
+            time.sleep(2)  # Simulate delay
+            mock_uid = next(iter(cfg.AUTHORIZED_UIDS))
+            print(f"MOCK Arduino: Card detected for auth! UID:{mock_uid}")
+            return mock_uid
+        elif scenario == 2:
+            # Invalid card
+            time.sleep(2)  # Simulate delay
+            invalid_uid = "DEADBEEF"  # Not in authorized list
+            print(f"MOCK Arduino: Card detected for auth! UID:{invalid_uid}")
+            return invalid_uid
+        else:
+            # Timeout
+            time.sleep(5)
+            print("MOCK: Simulating timeout (no card scanned)")
+            return None
 
     def send_json_command(self, command_dict):
         """Serializes a dictionary to a JSON string and sends it, or simulates it."""
