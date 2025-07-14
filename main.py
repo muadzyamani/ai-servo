@@ -89,7 +89,16 @@ class LlmServoControl:
         prompt = build_llm_prompt(
             user_input, self.current_angle, cfg.MOTOR_MIN_ANGLE, cfg.MOTOR_MAX_ANGLE
         )
-        llm_response_text = send_to_ollama(prompt, cfg.OLLAMA_API_URL, cfg.OLLAMA_MODEL)
+        llm_response_text, llm_stats = send_to_ollama(prompt, cfg.OLLAMA_API_URL, cfg.OLLAMA_MODEL)
+
+        if llm_stats:
+            print("\n--- LLM Performance ---")
+            print(f"  - Round-trip Latency (Python): {llm_stats['latency_sec']:.2f}s")
+            print(f"  - Prompt/Response Tokens:      {llm_stats['prompt_tokens']} / {llm_stats['response_tokens']}")
+            print(f"  - Total Ollama Duration:       {llm_stats['total_duration_ms']:.0f}ms")
+            print(f"    - Model Load Time:           {llm_stats['load_duration_ms']:.0f}ms")
+            print(f"    - Prompt Eval Time:          {llm_stats['prompt_eval_duration_ms']:.0f}ms")
+            print(f"    - Response Gen Time:         {llm_stats['eval_duration_ms']:.0f}ms")
 
         if llm_response_text:
             return parse_llm_response_to_json(llm_response_text)
@@ -99,7 +108,6 @@ class LlmServoControl:
     
     def display_command_help(self):
         """Prints a formatted help screen with available commands and examples."""
-        # ... (This function remains unchanged)
         print("\n--- Available Commands & Examples ---")
         print("The AI can interpret a wide range of natural language phrases.")
         print("Here are the primary actions it can perform:\n")
@@ -130,7 +138,6 @@ class LlmServoControl:
         print(f"Current motor angle assumed to be: {self.current_angle}")
 
         while True:
-            # ... (The rest of this function remains unchanged)
             mode_input = input("You: ").strip()
 
             if mode_input.lower() == 'speech':
@@ -169,6 +176,10 @@ class LlmServoControl:
                 # Pre-process ADJUST command into a GOTO command
                 if cmd == "ADJUST":
                     degrees = command_dict.get("degrees", 0)
+                    if degrees is None:
+                        print("AI understood 'ADJUST' but not the amount. Please be more specific (e.g., 'adjust by 20').")
+                        self.arduino.send_command(CMD_IDLE_STATE)
+                        continue # Skip the rest of the loop and ask for new input
                     target_angle = self.current_angle + degrees
                     # Clamp the angle to the valid range
                     clamped_angle = max(cfg.MOTOR_MIN_ANGLE, min(cfg.MOTOR_MAX_ANGLE, target_angle))
