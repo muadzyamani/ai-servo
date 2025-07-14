@@ -129,3 +129,34 @@ Instead of the LLM outputting the exact angle, you could have it output a comman
     1.  **Corrected Function Calls:** Replaced `.length()` with the standard C function `strlen()` in `display_functions.cpp` after including the `<string.h>` library.
     2.  **Synchronized Declarations:** Updated the `extern` variable declarations in `config.h` to use `const char*` to match their definitions.
     3.  **Centralized Definitions:** Moved the calculation of array sizes (`numWelcomeLines`, etc.) from `config.h` into `servo_lcd_display.ino`, where the arrays are actually defined and their size is known at compile time.
+
+## Implemented RFID Bypass Mode for Testing/Development 
+
+![IDE showing the Mock Mode and RFID Bypass variables that can be toggled](ide-rfid-bypass.png)
+
+The primary goal of this update was to make development and testing easier by allowing the application to run without requiring a physical RFID scan or even a connected Arduino.
+
+**Changes by File:**
+
+1.  **`config.py`**
+    *   **Added `BYPASS_RFID_AUTH` Toggle:** A new boolean flag was introduced to allow developers to completely skip the RFID authentication step. This speeds up testing of the core motor control and LLM features.
+    *   **Leveraged `USE_MOCK_ARDUINO`:** The existing mock mode toggle is now more powerful.
+
+2.  **`arduino.py`**
+    *   **Enhanced Mock `ArduinoController`:** The `wait_for_response` method in mock mode was made "smarter."
+    *   **Added `_simulate_rfid_auth_scenarios`:** When `USE_MOCK_ARDUINO` is `True` but `BYPASS_RFID_AUTH` is `False`, this new private method is called. It automatically simulates different outcomes (valid scan, invalid scan) to allow for testing the full authentication logic path without any hardware.
+
+3.  **`main.py`**
+    *   **Updated Authentication Logic:** The `authenticate()` method now checks for `cfg.BYPASS_RFID_AUTH` at the very beginning and returns a success state immediately if it's `True`.
+    *   **Dynamic Startup Prompts:** The main execution block now inspects the configuration and displays a user-friendly message indicating whether RFID authentication is enabled, disabled, or if the system is in mock mode.
+
+4.  **`README.md`**
+    *   **Full Documentation Update:** The README was significantly updated to reflect the new features.
+    *   Added a "Development & Testing Modes" section under **Features**.
+    *   Clarified the new toggles in the **Configuration** section.
+    *   Updated the **Running the Project** section to explain the new, dynamic startup prompts.
+
+**Outcome:** The project can now be developed and tested in three distinct modes:
+1.  **Full Hardware Mode:** Normal operation with Arduino and RFID.
+2.  **Bypass Mode:** Hardware connected, but RFID scan is skipped.
+3.  **Full Mock Mode:** No hardware needed; simulates both Arduino connection and various authentication events.
