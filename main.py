@@ -37,6 +37,16 @@ class LlmServoControl:
         Handles the RFID authentication flow before starting the main app.
         Returns True on success, False on failure/timeout.
         """
+        # Check if authentication is bypassed
+        if cfg.BYPASS_RFID_AUTH:
+            print("\n--- Authentication Bypassed (Testing Mode) ---")
+            print("RFID authentication is disabled in config.")
+            print("Proceeding directly to motor control...")
+            # Still send auth success to Arduino for consistent LCD display
+            self.arduino.send_command(CMD_AUTH_SUCCESS)
+            time.sleep(2) # Give Arduino time to display the message
+            return True
+        
         print("\n--- Awaiting Authentication ---")
         print("Please scan an authorized RFID card on the reader.")
         self.arduino.send_command(CMD_AWAIT_AUTH)
@@ -197,7 +207,15 @@ if __name__ == "__main__":
     if app.setup():
         print("\n-------------------------------------------")
         print("System connected. Arduino is in idle mode.")
-        print("Type 'begin' to start authentication.")
+        
+        # Show different prompts based on authentication mode
+        if cfg.BYPASS_RFID_AUTH:
+            print("RFID Authentication: DISABLED (Testing Mode)")
+            print("Type 'begin' to start motor control.")
+        else:
+            print("RFID Authentication: ENABLED")
+            print("Type 'begin' to start authentication.")
+        
         print("-------------------------------------------")
         while True:
             command = input("> ").strip().lower()
