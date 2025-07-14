@@ -2,12 +2,16 @@
 
 This project demonstrates controlling a servo motor connected to an Arduino UNO using natural language commands, either typed or spoken. The system is secured by an RFID authentication module, requiring an authorized card scan to begin operation. A lightweight AI model running locally via Ollama (e.g., `phi3:mini`) interprets the commands and generates a structured JSON response to control the servo's actions. A 16x2 parallel LCD provides a rich, interactive user experience with real-time feedback on the system's state and actions.
 
-The system now features a full lifecycle: a dynamic welcome screen, a user-initiated authentication stage, visual feedback for authorized and unauthorized scans, multiple modes of interaction, a variety of complex motor sequences, a system reset command, and a graceful shutdown sequence.
+The system now features a full lifecycle: a dynamic welcome screen, a user-initiated authentication stage, visual feedback for authorized and unauthorized scans, multiple modes of interaction, a variety of complex motor sequences, a system reset command, and a graceful shutdown sequence. It also includes robust testing and development modes to run the software without physical hardware.
 
 ## Features
 
-*   **RFID Authentication:** The system waits for an authorized RFID card to be scanned before accepting any motor commands.
+*   **RFID Authentication:** The system waits for an authorized RFID card to be scanned before accepting motor commands. (This can be bypassed for testing).
 *   **Interactive Startup:** The Arduino runs a welcome sequence, then waits for the user to type `begin` in the terminal to start the authentication process.
+*   **Development & Testing Modes:**
+    *   **Authentication Bypass:** A simple toggle in `config.py` to skip the RFID scan, allowing for rapid testing of motor commands.
+    *   **Hardware Mocking:** Run the entire Python application without a physical Arduino connected. The mock simulates hardware responses, making it ideal for testing the LLM integration and command logic.
+    *   **Simulated Auth Scenarios:** When in mock mode with authentication enabled, the system automatically simulates successful and failed RFID scans to test the full authentication logic without hardware.
 *   **Visual Access Control:**
     *   **Success:** A successful scan displays an "Authenticated!" message.
     *   **Failure:** An unauthorized scan triggers an "Access Denied!" message on the LCD and a "no" shake from the servo motor.
@@ -146,30 +150,52 @@ The system now features a full lifecycle: a dynamic welcome screen, a user-initi
 *   **`SERIAL_PORT`**: Match this to your Arduino's COM port (e.g., `'COM3'` on Windows, `'/dev/ttyACM0'` on Linux).
 *   **`OLLAMA_MODEL`**: Set to the Ollama model you are using (e.g., `"phi3:mini"`).
 
+*   **Testing Toggles:**
+    *   **`USE_MOCK_ARDUINO`**: Set to `True` to run the script without a physical Arduino. Ideal for testing LLM integration. When `True`, the `SERIAL_PORT` setting is ignored.
+    *   **`BYPASS_RFID_AUTH`**: Set to `True` to skip the RFID scan step and go directly to the command prompt. Useful for rapid development.
+
+*   **Application Settings:**
+    *   **`AUTHORIZED_UIDS`**: Paste your card's UID (in lowercase) into this dictionary.
+    *   **`SERIAL_PORT`**: Match this to your Arduino's COM port (e.g., `'COM3'` on Windows, `'/dev/ttyACM0'` on Linux).
+    *   **`OLLAMA_MODEL`**: Set to the Ollama model you are using (e.g., `"phi3:mini"`).
+
 **C. Verify Arduino Pins (`config.h`):**
 *   Pin definitions for the LCD, Servo, and RFID reader are in `config.h`. Ensure they match your wiring.
 
 ## Running the Project
 
 1.  **Start Ollama:** Make sure the Ollama service is running.
-2.  **Connect Arduino:** Connect your wired Arduino to the computer via USB. The LCD should light up and begin its welcome sequence.
+2.  **Connect Arduino:** (Skip if using mock mode). Connect your wired Arduino to the computer via USB. The LCD should light up and begin its welcome sequence.
 3.  **Activate Python Environment:** If using a venv, activate it.
 4.  **Run the Python Script:**
     ```bash
     python main.py
     ```
-5.  **Begin Authentication:**
-    The script will connect and show a prompt. The Arduino will finish its welcome sequence and go idle.
+5.  **Begin Interaction:**
+    The script will connect and show a prompt based on your `config.py` settings. It will clearly indicate if you are in mock mode and if RFID authentication is enabled or disabled.
+
+    **Example (Normal Operation):**
     ```
     -------------------------------------------
     System connected. Arduino is in idle mode.
+    RFID Authentication: ENABLED
     Type 'begin' to start authentication.
     -------------------------------------------
     > 
     ```
-    Type `begin` and press Enter. The LCD will now display "Please Scan Card".
+    **Example (Bypass Enabled):**
+    ```
+    -------------------------------------------
+    System connected. Arduino is in idle mode.
+    RFID Authentication: DISABLED (Testing Mode)
+    Type 'begin' to start motor control.
+    -------------------------------------------
+    > 
+    ```
+    Type `begin` and press Enter. If authentication is enabled, you will be prompted to scan a card. Otherwise, you will proceed directly to the main command prompt.
+
 6.  **Interact via CLI:**
-    After successful authentication, the main command prompt will appear.
+    After successful authentication (or bypass), the main command prompt will appear.
     **Example Commands:**
     *   `set to 45 degrees`
     *   `shake your head no`
