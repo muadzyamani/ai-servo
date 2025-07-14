@@ -12,10 +12,14 @@ AUTHORIZED_UIDS = {
     # "29aeaed4": "User1" # Replace with your actual card UID
 }
 
-# --- MOCK MODE TOGGLE ---
+# --- Testing Toggles ---
 # Set to True to simulate Arduino connection for testing without hardware.
 # Set to False for normal operation with a connected Arduino.
 USE_MOCK_ARDUINO = False 
+
+# Set to True to bypass RFID authentication for testing purposes.
+# Set to False for normal operation with RFID authentication required.
+BYPASS_RFID_AUTH = False
 
 # --- Hardware Settings (ignored if USE_MOCK_ARDUINO is True) ---
 SERIAL_PORT = 'COM3'
