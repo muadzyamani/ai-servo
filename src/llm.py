@@ -1,6 +1,7 @@
 import requests
 import re
 import json
+import time
 
 def check_ollama_availability():
     """Check if Ollama is running and accessible."""
@@ -30,13 +31,36 @@ def send_to_ollama(prompt_text, api_url, model):
         }
     }
     try:
+        # 1. CAPTURE START TIME
+        start_time = time.time()
+
         response = requests.post(api_url, json=payload, timeout=30)
         response.raise_for_status()
+
+        # 2. CALCULATE LATENCY
+        latency = time.time() - start_time
+        
         response_data = response.json()
-        return response_data.get("response", "").strip()
+        
+        # 3. EXTRACT TOKEN COUNTS AND CREATE A STATS DICT
+        # Ollama provides detailed timing and token counts in its response
+        stats = {
+            "latency_sec": round(latency, 2),
+            "prompt_tokens": response_data.get("prompt_eval_count", 0),
+            "response_tokens": response_data.get("eval_count", 0),
+            "total_duration_ms": response_data.get("total_duration", 0) / 1_000_000, # Convert nanoseconds to ms
+            "load_duration_ms": response_data.get("load_duration", 0) / 1_000_000,
+            "prompt_eval_duration_ms": response_data.get("prompt_eval_duration", 0) / 1_000_000,
+            "eval_duration_ms": response_data.get("eval_duration", 0) / 1_000_000
+        }
+        
+        # 4. RETURN THE RESPONSE AND THE STATS
+        return response_data.get("response", "").strip(), stats
+
     except requests.exceptions.RequestException as e:
         print(f"Error communicating with Ollama: {e}")
-        return None
+        # Return None for both values in case of an error
+        return None, None
 
 def parse_llm_response_to_json(llm_text):
     """
@@ -94,42 +118,19 @@ def parse_command_with_keywords(user_input_raw, current_angle, min_angle, max_an
 def build_llm_prompt(user_input, current_angle, min_angle, max_angle):
     # This prompt is the core of the system. It defines the "API" for the LLM.
     return f"""
-You are an expert AI assistant that translates natural language commands into a structured JSON format for controlling a servo motor.
-The motor's range is {min_angle} to {max_angle} degrees. The current motor angle is {current_angle} degrees.
+    You are a JSON API for a servo motor.
+    Motor range: {min_angle}-{max_angle}. Current angle: {current_angle}.
+    Convert the user request to a JSON object.
 
-Analyze the user's request and create a JSON object with a "command" and its required "parameters".
+    COMMANDS & EXAMPLES:
+    - "GOTO": Move to absolute angle. Ex: "go to 90" -> {{"command": "GOTO", "angle": 90}}
+    - "ADJUST": Move by relative degrees. Ex: "turn right a bit" -> {{"command": "ADJUST", "degrees": 20}}
+    - "SPIN": Full rotations. Ex: "spin twice" -> {{"command": "SPIN", "times": 2}}
+    - "SWEEP": Scan side-to-side. Ex: "sweep the area" -> {{"command": "SWEEP", "repetitions": 1}}
+    - "NOD": "Yes" motion. Ex: "nod yes" -> {{"command": "NOD", "times": 2}}
+    - "SHAKE": "No" motion. Ex: "shake no" -> {{"command": "SHAKE", "times": 2}}
 
-Available commands are:
-1.  "GOTO": Move to a specific angle.
-    - Parameters: "angle" (integer, {min_angle}-{max_angle}).
-    - Example: "move to 90 degrees" -> {{"command": "GOTO", "angle": 90}}
-    - Note: "open" means {max_angle}, "close" means {min_angle}, "middle" means 90.
+    Request: "{user_input}"
 
-2.  "ADJUST": Move by a relative amount of degrees.
-    - Parameters: "degrees" (integer). Positive is clockwise (towards {max_angle}), negative is counter-clockwise (towards {min_angle}).
-    - Example: "turn a little to the right" -> {{"command": "ADJUST", "degrees": 20}}
-    - Example: "move 30 degrees left" -> {{"command": "ADJUST", "degrees": -30}}
-
-3.  "SPIN": Perform full rotations back and forth.
-    - Parameters: "times" (integer, number of full spins).
-    - Note: This action ends at the starting angle.
-    - Example: "spin 3 times" -> {{"command": "SPIN", "times": 3}}
-
-4.  "SWEEP": Move back and forth continuously like a radar.
-    - Parameters: "repetitions" (integer, number of back-and-forth sweeps).
-    - Note: This action ends at the starting angle.
-    - Example: "sweep back and forth 5 times" -> {{"command": "SWEEP", "repetitions": 5}}
-    
-5.  "NOD": Perform a "yes" motion.
-    - Parameters: "times" (integer).
-    - Example: "nod yes" -> {{"command": "NOD", "times": 2}}
-
-6.  "SHAKE": Perform a "no" motion.
-    - Parameters: "times" (integer).
-    - Example: "shake your head" -> {{"command": "SHAKE", "times": 2}}
-
-User Request: "{user_input}"
-Current Angle: {current_angle}
-
-Respond ONLY with the JSON object. Do not add any other text, explanation, or markdown formatting.
-"""
+    Respond ONLY with the JSON object.
+    """
